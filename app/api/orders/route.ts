@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrders, createOrder, createAttachment } from '@/db/queries';
 import { getAuthUser } from '@/lib/auth';
-import { put } from '@vercel/blob';
+import { uploadFile } from '@/lib/storage';
 import { genId } from '@/lib/utils';
 import path from 'path';
 import type { UserRole } from '@/types';
@@ -36,10 +36,10 @@ export async function POST(req: NextRequest) {
 
     const filename = `${genId()}${ext}`;
     const fileType = ext === '.pdf' ? 'PDF' : ext.startsWith('.doc') ? 'WORD' : 'EXCEL';
-    const blob = await put(filename, file, { access: 'public' });
+    const blobUrl = await uploadFile(file, filename);
     await createAttachment(
       order.id,
-      { filename, originalName: file.name, fileType, blobUrl: blob.url, size: file.size },
+      { filename, originalName: file.name, fileType, blobUrl, size: file.size },
       user.userId,
     );
 

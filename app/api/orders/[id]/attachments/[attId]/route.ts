@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteAttachment } from '@/db/queries';
 import { getAuthUser } from '@/lib/auth';
-import { del } from '@vercel/blob';
+import { deleteFile } from '@/lib/storage';
 import { db } from '@/db/index';
 import { attachments } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -22,9 +22,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ att
     if (!user || user.role === 'VIEWER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const { attId } = await params;
     const blobUrl = await deleteAttachment(attId);
-    if (blobUrl) {
-      try { await del(blobUrl); } catch { /* ignore if already deleted */ }
-    }
+    await deleteFile(blobUrl);
     return NextResponse.json({ ok: true });
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 }
