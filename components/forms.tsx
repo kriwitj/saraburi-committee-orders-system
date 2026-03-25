@@ -1,39 +1,72 @@
 'use client';
-import { useState } from 'react';
-import type { Order, SubCommittee, Member } from '@/types';
+import { useState, useEffect } from 'react';
+import type { Order, SubCommittee, Member, Agency } from '@/types';
 import { Modal, FG, Input, Textarea, Select, Btn } from './ui';
 import { useSettings } from './providers';
 
 type OD = Omit<Order, 'id'|'subCommittees'|'attachments'|'createdAt'|'updatedAt'|'createdBy'>;
 
 // ── Order Form ─────────────────────────────────────────────────────
-export function OrderForm({ initial, onSave, onClose }: { initial?: Partial<OD>; onSave: (d: OD) => Promise<void>; onClose: () => void }) {
+export function OrderForm({ initial, onSave, onClose }: {
+  initial?: Partial<OD>;
+  onSave: (d: OD, file?: File) => Promise<void>;
+  onClose: () => void;
+}) {
   const { settings } = useSettings();
-  const [f, setF] = useState<OD>({ orderNumber:'', orderDate:'', effectiveDate:'', type: settings.orderTypes[0]||'คณะกรรมการ',
-    title:'', background:'', signedBy:'', signedByTitle:'ผู้ว่าราชการจังหวัดสระบุรี', status:'ACTIVE', cancelReason:null, ...initial });
+  const isNew = !initial?.orderNumber;
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [f, setF] = useState<OD>({
+    orderNumber: '', orderDate: '', effectiveDate: '', type: settings.orderTypes[0] || 'คณะกรรมการ',
+    title: '', background: '', signedBy: '', signedByTitle: 'ผู้ว่าราชการจังหวัดสระบุรี',
+    status: 'ACTIVE', cancelReason: null, agencyId: null, ...initial,
+  });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const set = (k: keyof OD) => (e: React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>) =>
-    setF(p => ({ ...p, [k]: e.target.value }));
+
+  useEffect(() => {
+    fetch('/api/agencies').then(r => r.ok ? r.json() : []).then(setAgencies).catch(() => {});
+  }, []);
+
+  const set = (k: keyof OD) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setF(p => ({ ...p, [k]: e.target.value || null }));
+
   async function save() {
     if (!f.orderNumber.trim() || !f.title.trim()) { setErr('กรุณากรอกเลขคำสั่ง และชื่อเรื่อง'); return; }
+    if (isNew && !file) { setErr('กรุณาแนบไฟล์คำสั่ง (PDF, Word, Excel)'); return; }
     setBusy(true); setErr('');
-    try { await onSave(f); } catch { setErr('เกิดข้อผิดพลาด'); } finally { setBusy(false); }
+    try { await onSave(f, file || undefined); } catch { setErr('เกิดข้อผิดพลาด'); } finally { setBusy(false); }
   }
-  return <Modal title={initial?.orderNumber ? 'แก้ไขคำสั่ง' : 'เพิ่มคำสั่งใหม่'} onClose={onClose} wide>
+
+  return <Modal title={isNew ? 'เพิ่มคำสั่งใหม่' : 'แก้ไขคำสั่ง'} onClose={onClose} wide>
     {err && <p className="text-red-600 text-sm mb-3 bg-red-50 p-2 rounded">{err}</p>}
     <div className="grid grid-cols-2 gap-x-3">
       <FG label="เลขคำสั่ง" required><Input value={f.orderNumber} onChange={set('orderNumber')} placeholder="เช่น 4971/2568" /></FG>
       <FG label="ประเภท" required><Select options={settings.orderTypes} value={f.type} onChange={set('type')} /></FG>
     </div>
     <FG label="ชื่อเรื่อง" required><Input value={f.title} onChange={set('title')} placeholder="เรื่อง แต่งตั้ง ..." /></FG>
-    <FG label="หลักการและเหตุผล"><Textarea rows={3} value={f.background||''} onChange={set('background')} /></FG>
+    <FG label="หน่วยงานเจ้าของคำสั่ง">
+      <select className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
+        value={f.agencyId || ''} onChange={e => setF(p => ({ ...p, agencyId: e.target.value || null }))}>
+        <option value="">-- ไม่ระบุ --</option>
+        {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </select>
+    </FG>
+    <FG label="หลักการและเหตุผล"><Textarea rows={3} value={f.background || ''} onChange={set('background')} /></FG>
     <div className="grid grid-cols-2 gap-x-3">
-      <FG label="วันที่ออกคำสั่ง"><Input type="date" value={f.orderDate||''} onChange={set('orderDate')} /></FG>
-      <FG label="วันที่มีผลบังคับ"><Input type="date" value={f.effectiveDate||''} onChange={set('effectiveDate')} /></FG>
-      <FG label="ชื่อผู้ลงนาม"><Input value={f.signedBy||''} onChange={set('signedBy')} placeholder="นาย/นาง ..." /></FG>
-      <FG label="ตำแหน่งผู้ลงนาม"><Input value={f.signedByTitle||''} onChange={set('signedByTitle')} /></FG>
+      <FG label="วันที่ออกคำสั่ง"><Input type="date" value={f.orderDate || ''} onChange={set('orderDate')} /></FG>
+      <FG label="วันที่มีผลบังคับ"><Input type="date" value={f.effectiveDate || ''} onChange={set('effectiveDate')} /></FG>
+      <FG label="ชื่อผู้ลงนาม"><Input value={f.signedBy || ''} onChange={set('signedBy')} placeholder="นาย/นาง ..." /></FG>
+      <FG label="ตำแหน่งผู้ลงนาม"><Input value={f.signedByTitle || ''} onChange={set('signedByTitle')} /></FG>
     </div>
+    {isNew && (
+      <FG label="ไฟล์คำสั่ง" required>
+        <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls"
+          onChange={e => setFile(e.target.files?.[0] || null)}
+          className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold cursor-pointer" />
+        <p className="text-xs text-gray-400 mt-1">รองรับ PDF, Word, Excel (จำเป็น)</p>
+      </FG>
+    )}
     <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
       <Btn variant="secondary" onClick={onClose}>ยกเลิก</Btn>
       <Btn onClick={save} loading={busy}>💾 บันทึก</Btn>

@@ -7,8 +7,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ui
     const user = await getAuthUser();
     if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const { uid } = await params;
-    const { name, role, password } = await req.json();
-    await updateUser(uid, { name, role, passwordHash: password ? hashPassword(password) : undefined });
+    const { name, role, password, prefix, agencyId } = await req.json();
+    await updateUser(uid, {
+      name, role, passwordHash: password ? hashPassword(password) : undefined,
+      prefix: prefix !== undefined ? prefix : undefined,
+      agencyId: agencyId !== undefined ? agencyId : undefined,
+    });
     return NextResponse.json({ ok: true });
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 }

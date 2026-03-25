@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Settings } from '@/types';
 
-interface AuthUser { id: string; email: string; name: string | null; role: string; }
+interface AuthUser { id: string; email: string; name: string | null; role: string; agencyId: string | null; }
 interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;

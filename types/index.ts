@@ -1,10 +1,18 @@
 export type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER';
-export type OrderStatus = 'ACTIVE' | 'CANCELLED' | 'DRAFT';
+export type OrderStatus = 'ACTIVE' | 'CANCELLED' | 'DRAFT' | 'DELETED';
+
+export interface Agency {
+  id: string;
+  name: string;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
   email: string;
+  prefix: string | null;
   name: string | null;
+  agencyId: string | null;
   role: UserRole;
   createdAt: string;
 }
@@ -34,6 +42,7 @@ export interface Attachment {
   filename: string;
   originalName: string;
   fileType: string;
+  blobUrl: string;
   size: number;
   createdAt: string;
 }
@@ -50,6 +59,7 @@ export interface Order {
   signedByTitle: string | null;
   status: OrderStatus;
   cancelReason: string | null;
+  agencyId: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -86,12 +96,14 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
   ACTIVE: 'มีผลบังคับ',
   CANCELLED: 'ยกเลิกแล้ว',
   DRAFT: 'ร่าง',
+  DELETED: 'ถูกลบ',
 };
 
 export const STATUS_COLORS: Record<OrderStatus, string> = {
   ACTIVE: '#065f46',
   CANCELLED: '#991b1b',
   DRAFT: '#92400e',
+  DELETED: '#6b7280',
 };
 
 export const TYPE_COLORS: Record<string, string> = {

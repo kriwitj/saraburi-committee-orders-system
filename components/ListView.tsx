@@ -37,8 +37,11 @@ export function ListView({ orders, onSelect, onRefresh }: Props) {
       && (!filterYear || thYear(o.orderDate) === filterYear);
   }), [orders, search, filterType, filterStatus, filterYear]);
 
-  async function addOrder(data: object) {
-    const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  async function addOrder(data: object, file?: File) {
+    const form = new FormData();
+    form.append('orderData', JSON.stringify(data));
+    if (file) form.append('file', file);
+    const r = await fetch('/api/orders', { method: 'POST', body: form });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
     setModal(null); onRefresh();
@@ -55,7 +58,9 @@ export function ListView({ orders, onSelect, onRefresh }: Props) {
     else notify('ลบไม่สำเร็จ (เฉพาะ Admin)', 'err');
   }
 
-  const statuses: OrderStatus[] = ['ACTIVE', 'DRAFT', 'CANCELLED'];
+  const statuses: OrderStatus[] = user?.role === 'ADMIN'
+    ? ['ACTIVE', 'DRAFT', 'CANCELLED', 'DELETED']
+    : ['ACTIVE', 'DRAFT', 'CANCELLED'];
 
   return (
     <div>

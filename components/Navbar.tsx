@@ -28,6 +28,13 @@ export function Navbar({ stats }: { stats?: { orders: number; scs: number; membe
             </div>
           )}
 
+          {user && user.role !== 'ADMIN' && (
+            <a href="/my-orders"
+              className="hidden sm:flex items-center gap-1 text-sm text-blue-200 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/10">
+              🏢 คำสั่งหน่วยงาน
+            </a>
+          )}
+
           {user && (
             <div className="relative">
               <button onClick={() => setOpen(o => !o)}

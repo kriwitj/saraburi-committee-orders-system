@@ -13,6 +13,7 @@ export interface JWTPayload {
   email: string;
   role: string;
   name: string | null;
+  agencyId: string | null;
 }
 
 export async function signToken(payload: JWTPayload): Promise<string> {

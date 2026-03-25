@@ -21,7 +21,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!loading && !user) window.location.href = '/login';
+    if (!loading && !user) window.location.href = '/landing';
     if (!loading && user) fetchOrders();
   }, [loading, user, fetchOrders]);
 

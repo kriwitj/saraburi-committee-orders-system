@@ -14,9 +14,12 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    const { email, name, password, role } = await req.json();
+    const { email, name, password, role, prefix, agencyId } = await req.json();
     if (!email || !password) return NextResponse.json({ error: 'กรุณากรอกข้อมูลให้ครบ' }, { status: 400 });
-    const id = await createUser(email.toLowerCase().trim(), name || '', hashPassword(password), role || 'VIEWER');
+    const id = await createUser(
+      email.toLowerCase().trim(), name || '', hashPassword(password),
+      role || 'VIEWER', prefix || null, agencyId || null,
+    );
     return NextResponse.json({ id }, { status: 201 });
   } catch (e: unknown) {
     if ((e as NodeJS.ErrnoException)?.message?.includes('UNIQUE')) {

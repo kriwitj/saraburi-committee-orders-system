@@ -11,12 +11,18 @@ export async function POST(req: NextRequest) {
     await seedIfEmpty(hashPassword('Admin@1234'));
 
     const user = await getUserByEmail(email.toLowerCase().trim());
-    if (!user || !checkPassword(password, user.password_hash)) {
+    if (!user || !checkPassword(password, user.passwordHash)) {
       return NextResponse.json({ error: 'อีเมล์หรือรหัสผ่านไม่ถูกต้อง' }, { status: 401 });
     }
 
-    const token = await signToken({ userId: user.id, email: user.email, role: user.role, name: user.name });
-    const res = NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    const token = await signToken({
+      userId: user.id, email: user.email, role: user.role,
+      name: user.name, agencyId: user.agencyId,
+    });
+    const res = NextResponse.json({
+      ok: true,
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, agencyId: user.agencyId },
+    });
     res.cookies.set(COOKIE_NAME, token, { httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 7, path: '/' });
     return res;
   } catch (e) {
