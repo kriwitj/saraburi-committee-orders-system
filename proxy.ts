@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from './lib/auth';
 
-const PUBLIC_PATHS = ['/login', '/landing', '/api/auth/login', '/api/stats'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/stats'];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  if (pathname === '/') return NextResponse.next();
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) return NextResponse.next();
 

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Order, SubCommittee, Member, Agency } from '@/types';
 import { Modal, FG, Input, Textarea, Select, Btn } from './ui';
 import { useSettings } from './providers';
@@ -120,6 +120,60 @@ export function SCForm({ initial, onSave, onClose }: { initial?: Partial<SCD>; o
   </Modal>;
 }
 
+// ── Agency Combobox ────────────────────────────────────────────────
+function AgencyCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/agencies').then(r => r.ok ? r.json() : []).then(setAgencies).catch(() => {});
+  }, []);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const filtered = query
+    ? agencies.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
+    : agencies;
+
+  function select(name: string) {
+    setQuery(name); onChange(name); setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="text"
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+        placeholder="พิมพ์เพื่อค้นหาหรือกรอกเอง..."
+        className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map(a => (
+            <li key={a.id}
+              onMouseDown={() => select(a.name)}
+              className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors">
+              🏢 {a.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Member Form ────────────────────────────────────────────────────
 type MD = Omit<Member,'id'|'subCommitteeId'>;
 export function MemberForm({ initial, onSave, onClose }: { initial?: Partial<MD>; onSave: (d: MD) => Promise<void>; onClose: () => void }) {
@@ -135,7 +189,9 @@ export function MemberForm({ initial, onSave, onClose }: { initial?: Partial<MD>
   return <Modal title={initial?.agencyPosition ? 'แก้ไขรายชื่อ' : 'เพิ่มรายชื่อ'} onClose={onClose}>
     <FG label="ชื่อ-นามสกุล (กรณีระบุเฉพาะบุคคล)"><Input value={f.name||''} onChange={set('name')} placeholder="กรณีระบุบุคคลเฉพาะ" /></FG>
     <FG label="ตำแหน่งในองค์กร" required><Input value={f.agencyPosition||''} onChange={set('agencyPosition')} placeholder="เช่น ผู้ว่าราชการจังหวัด" /></FG>
-    <FG label="หน่วยงาน / สังกัด"><Input value={f.agency||''} onChange={set('agency')} placeholder="เช่น จังหวัดสระบุรี" /></FG>
+    <FG label="หน่วยงาน / สังกัด">
+      <AgencyCombobox value={f.agency || ''} onChange={v => setF(p => ({ ...p, agency: v || null }))} />
+    </FG>
     <FG label="บทบาทในคณะ" required><Select options={settings.memberRoles} value={f.role||''} onChange={set('role')} /></FG>
     <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
       <Btn variant="secondary" onClick={onClose}>ยกเลิก</Btn>

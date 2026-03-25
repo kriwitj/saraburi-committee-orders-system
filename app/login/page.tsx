@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) window.location.href = '/';
+    if (!loading && user) window.location.href = '/orders';
   }, [user, loading]);
 
   async function submit(e: React.FormEvent) {
@@ -18,7 +18,7 @@ export default function LoginPage() {
     setBusy(true); setErr('');
     const errMsg = await login(email, pass);
     if (errMsg) { setErr(errMsg); setBusy(false); }
-    else window.location.href = '/';
+    else window.location.href = '/orders';
   }
 
   return (

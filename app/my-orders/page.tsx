@@ -1,11 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/providers';
-import { Navbar } from '@/components/Navbar';
+import { AdminLayout } from '@/components/AdminLayout';
 import { DetailView } from '@/components/DetailView';
 import { Badge, StatusBadge, Empty } from '@/components/ui';
 import type { Order } from '@/types';
-import { getTypeColor, STATUS_COLORS, STATUS_LABELS } from '@/types';
+import { getTypeColor } from '@/types';
 import { formatThDate } from '@/lib/utils';
 
 export default function MyOrdersPage() {
@@ -19,7 +19,6 @@ export default function MyOrdersPage() {
       const r = await fetch('/api/orders');
       if (r.ok) {
         const all: Order[] = await r.json();
-        // Filter to user's agency only
         const filtered = user?.agencyId
           ? all.filter(o => o.agencyId === user.agencyId)
           : all;
@@ -29,7 +28,7 @@ export default function MyOrdersPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!loading && !user) window.location.href = '/landing';
+    if (!loading && !user) window.location.href = '/login';
     if (!loading && user) fetchOrders();
   }, [loading, user, fetchOrders]);
 
@@ -37,7 +36,7 @@ export default function MyOrdersPage() {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="text-center text-gray-500">
-          <div className="text-4xl mb-3">⟳</div>
+          <div className="text-3xl mb-3 animate-spin">⟳</div>
           <p className="text-sm">กำลังโหลดข้อมูล...</p>
         </div>
       </div>
@@ -46,54 +45,44 @@ export default function MyOrdersPage() {
 
   const selected = orders.find(o => o.id === selectedId);
 
-  if (selectedId && selected) {
-    return (
-      <div className="min-h-screen bg-slate-100">
-        <Navbar />
-        <div className="bg-white border-b border-gray-100 shadow-sm">
-          <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-1.5 text-sm text-gray-500">
-            <a href="/" className="hover:text-blue-600">หน้าหลัก</a>
-            <span>/</span>
-            <button className="hover:text-blue-600 cursor-pointer" onClick={() => setSelectedId(null)}>คำสั่งหน่วยงาน</button>
-            <span>/</span>
-            <span className="text-blue-700 font-semibold">{selected.orderNumber}</span>
-          </div>
-        </div>
-        <main className="max-w-6xl mx-auto px-4 py-5">
-          <DetailView order={selected} onBack={() => setSelectedId(null)} onRefresh={fetchOrders} />
-        </main>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-100">
-      <Navbar />
-      <div className="bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-1.5 text-sm text-gray-500">
-          <a href="/" className="hover:text-blue-600">หน้าหลัก</a>
-          <span>/</span>
-          <span className="text-blue-700 font-semibold">คำสั่งหน่วยงานของฉัน</span>
-        </div>
-      </div>
-      <main className="max-w-6xl mx-auto px-4 py-5">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-bold text-gray-900">
-            🏢 คำสั่งเฉพาะหน่วยงานตนเอง
-            <span className="ml-2 text-sm font-normal text-gray-500">({orders.length} รายการ)</span>
-          </h1>
-        </div>
+    <AdminLayout title="คำสั่งหน่วยงาน">
+      {selectedId && selected ? (
+        <>
+          <div className="bg-white border-b border-gray-100 shadow-sm">
+            <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-1.5 text-sm text-gray-500">
+              <button className="hover:text-blue-600 cursor-pointer transition-colors" onClick={() => setSelectedId(null)}>
+                คำสั่งหน่วยงาน
+              </button>
+              <span className="text-gray-300">/</span>
+              <span className="text-blue-700 font-semibold">{selected.orderNumber}</span>
+            </div>
+          </div>
+          <div className="max-w-6xl mx-auto px-4 py-5 animate-fade-in">
+            <DetailView order={selected} onBack={() => setSelectedId(null)} onRefresh={fetchOrders} />
+          </div>
+        </>
+      ) : (
+        <div className="max-w-6xl mx-auto px-4 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-lg font-bold text-gray-900">
+              🏢 คำสั่งเฉพาะหน่วยงานตนเอง
+              <span className="ml-2 text-sm font-normal text-gray-500">({orders.length} รายการ)</span>
+            </h1>
+          </div>
 
-        {orders.length === 0
-          ? <div className="bg-white rounded-xl shadow-sm"><Empty icon="📋" text="ไม่มีคำสั่งของหน่วยงานนี้" sub="ยังไม่มีคำสั่งที่ระบุหน่วยงานของคุณ" /></div>
-          : (
+          {orders.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm">
+              <Empty icon="📋" text="ไม่มีคำสั่งของหน่วยงานนี้" sub="ยังไม่มีคำสั่งที่ระบุหน่วยงานของคุณ" />
+            </div>
+          ) : (
             <div className="flex flex-col gap-2.5">
               {orders.map(o => {
                 const tColor = getTypeColor(o.type);
                 const totalM = o.subCommittees.reduce((s, sc) => s + sc.members.length, 0);
                 return (
                   <div key={o.id}
-                    className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                    className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
                     style={{ borderLeft: `4px solid ${tColor}` }}
                     onClick={() => setSelectedId(o.id)}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -117,9 +106,9 @@ export default function MyOrdersPage() {
                 );
               })}
             </div>
-          )
-        }
-      </main>
-    </div>
+          )}
+        </div>
+      )}
+    </AdminLayout>
   );
 }

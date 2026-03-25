@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth, useSettings } from '@/components/providers';
-import { Navbar } from '@/components/Navbar';
+import { AdminLayout } from '@/components/AdminLayout';
 import { Btn, Toast, Modal, FG, Input, Select } from '@/components/ui';
 import type { Agency } from '@/types';
 
@@ -107,20 +107,15 @@ export default function SettingsPage() {
   }
 
   if (user?.role !== 'ADMIN') {
-    return <div className="min-h-screen bg-slate-100"><Navbar /><div className="max-w-4xl mx-auto p-8 text-center text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</div></div>;
+    return <AdminLayout title="ตั้งค่าระบบ"><div className="max-w-4xl mx-auto p-8 text-center text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</div></AdminLayout>;
   }
 
   const tabCls = (t: string) => `px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-colors ${activeTab === t ? 'bg-blue-700 text-white' : 'text-gray-600 hover:bg-gray-100'}`;
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <Navbar />
+    <AdminLayout title="ตั้งค่าระบบ">
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <div className="flex items-center gap-3 mb-6">
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-700">← กลับหน้าหลัก</a>
-          <span className="text-gray-300">/</span>
-          <h1 className="text-xl font-bold text-gray-900">⚙️ ตั้งค่าระบบ</h1>
-        </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-6">⚙️ ตั้งค่าระบบ</h1>
 
         <div className="flex gap-1 mb-5 bg-white rounded-xl p-1 shadow-sm w-fit flex-wrap">
           {[['types', '📋 ประเภทคำสั่ง'], ['roles', '👤 บทบาท'], ['users', '🔑 ผู้ใช้'], ['agencies', '🏢 หน่วยงาน']].map(([t, l]) => (
@@ -261,6 +256,6 @@ export default function SettingsPage() {
       )}
 
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-    </div>
+    </AdminLayout>
   );
 }
