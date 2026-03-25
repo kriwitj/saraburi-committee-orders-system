@@ -1,0 +1,3 @@
+@import "tailwindcss";
+body { font-family: 'Sarabun','Noto Sans Thai',sans-serif; }
+.line-clamp-2 { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
