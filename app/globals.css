@@ -2,8 +2,10 @@
 
 body {
   font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
+  overflow-x: hidden;
 }
 
+/* ── Line clamp ────────────────────────────────────────────────── */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -11,37 +13,46 @@ body {
   overflow: hidden;
 }
 
-/* ── Page / content enter animation ──────────────────────────── */
+/* ── Page enter animation ─────────────────────────────────────────
+   IMPORTANT: The 'to' keyframe intentionally omits 'transform' so
+   after the animation completes the element has transform:none.
+   If 'transform:translateY(0)' were used in 'to', it would create a
+   new CSS containing block and break position:fixed (Modal portals).
+   The Modal uses createPortal anyway, but this keeps things clean.
+ ─────────────────────────────────────────────────────────────────── */
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    /* no 'transform' here → reverts to element's natural value (none) */
+  }
 }
 .page-enter {
-  animation: fadeSlideIn 0.25s ease-out both;
+  animation: fadeSlideIn 0.22s ease-out forwards;
 }
 
-/* ── Subtle fade-in for detail views ─────────────────────────── */
+/* ── Content fade-in (attachment panels, detail view, etc.) ──────── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; }
 }
 .animate-fade-in {
-  animation: fadeIn 0.2s ease-out both;
+  animation: fadeIn 0.16s ease-out forwards;
 }
 
-/* ── Sidebar transition (already handled by Tailwind, but ensure smooth) */
+/* ── Sidebar GPU acceleration ─────────────────────────────────── */
 aside {
   will-change: transform;
 }
 
-/* ── Modal backdrop blur ──────────────────────────────────────── */
-@keyframes backdropIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.fixed.inset-0.bg-black\/50 {
-  animation: backdropIn 0.15s ease-out;
-}
+/* ── Scrollbar (sidebar) ──────────────────────────────────────── */
+aside::-webkit-scrollbar { width: 4px; }
+aside::-webkit-scrollbar-track { background: transparent; }
+aside::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+aside::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
 /* ── Card hover lift ──────────────────────────────────────────── */
 .hover\:shadow-md {
@@ -51,8 +62,22 @@ aside {
   transform: translateY(-1px);
 }
 
-/* ── Scrollbar styling (sidebar) ─────────────────────────────── */
-aside::-webkit-scrollbar { width: 4px; }
-aside::-webkit-scrollbar-track { background: transparent; }
-aside::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
-aside::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+/* ── Smooth scrolling ─────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Focus ring ───────────────────────────────────────────────── */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 0;
+}
+
+/* ── Mobile: single-column form grids ────────────────────────── */
+@media (max-width: 480px) {
+  .grid.grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+}

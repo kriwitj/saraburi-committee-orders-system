@@ -9,13 +9,13 @@ type OD = Omit<Order, 'id'|'subCommittees'|'attachments'|'createdAt'|'updatedAt'
 // ── Order Form ─────────────────────────────────────────────────────
 export function OrderForm({ initial, onSave, onClose }: {
   initial?: Partial<OD>;
-  onSave: (d: OD, file?: File) => Promise<void>;
+  onSave: (d: OD, files?: File[]) => Promise<void>;
   onClose: () => void;
 }) {
   const { settings } = useSettings();
   const isNew = !initial?.orderNumber;
   const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [f, setF] = useState<OD>({
     orderNumber: '', orderDate: '', effectiveDate: '', type: settings.orderTypes[0] || 'คณะกรรมการ',
     title: '', background: '', signedBy: '', signedByTitle: 'ผู้ว่าราชการจังหวัดสระบุรี',
@@ -33,9 +33,9 @@ export function OrderForm({ initial, onSave, onClose }: {
 
   async function save() {
     if (!f.orderNumber.trim() || !f.title.trim()) { setErr('กรุณากรอกเลขคำสั่ง และชื่อเรื่อง'); return; }
-    if (isNew && !file) { setErr('กรุณาแนบไฟล์คำสั่ง (PDF, Word, Excel)'); return; }
+    if (isNew && !files.length) { setErr('กรุณาแนบไฟล์คำสั่งอย่างน้อย 1 ไฟล์ (PDF, Word, Excel)'); return; }
     setBusy(true); setErr('');
-    try { await onSave(f, file || undefined); } catch { setErr('เกิดข้อผิดพลาด'); } finally { setBusy(false); }
+    try { await onSave(f, files.length ? files : undefined); } catch { setErr('เกิดข้อผิดพลาด'); } finally { setBusy(false); }
   }
 
   return <Modal title={isNew ? 'เพิ่มคำสั่งใหม่' : 'แก้ไขคำสั่ง'} onClose={onClose} wide>
@@ -61,10 +61,19 @@ export function OrderForm({ initial, onSave, onClose }: {
     </div>
     {isNew && (
       <FG label="ไฟล์คำสั่ง" required>
-        <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls"
-          onChange={e => setFile(e.target.files?.[0] || null)}
+        <input type="file" multiple accept=".pdf,.docx,.doc,.xlsx,.xls"
+          onChange={e => setFiles(Array.from(e.target.files || []))}
           className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold cursor-pointer" />
-        <p className="text-xs text-gray-400 mt-1">รองรับ PDF, Word, Excel (จำเป็น)</p>
+        <p className="text-xs text-gray-400 mt-1">รองรับ PDF, Word, Excel · เลือกได้หลายไฟล์ (จำเป็น)</p>
+        {files.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {files.map((file, i) => (
+              <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs border border-blue-100">
+                📄 <span className="max-w-40 truncate">{file.name}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </FG>
     )}
     <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">

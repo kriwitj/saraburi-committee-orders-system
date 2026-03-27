@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find d:kriwit.j10.Programming256925680211_orders-committee-systemsarorders -path */node_modules -prune -o -name types.* -type f -print)",
+      "Bash(grep -E \"types\\\\.\\(ts|tsx\\)$\")"
+    ]
+  }
+}

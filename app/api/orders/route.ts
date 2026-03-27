@@ -23,27 +23,31 @@ export async function POST(req: NextRequest) {
 
     const form = await req.formData();
     const orderDataStr = form.get('orderData') as string | null;
-    const file = form.get('file') as File | null;
+    const files = form.getAll('file') as File[];
 
     if (!orderDataStr) return NextResponse.json({ error: 'Missing orderData' }, { status: 400 });
-    if (!file) return NextResponse.json({ error: 'ต้องแนบไฟล์คำสั่ง' }, { status: 400 });
+    if (!files.length) return NextResponse.json({ error: 'ต้องแนบไฟล์คำสั่งอย่างน้อย 1 ไฟล์' }, { status: 400 });
 
-    const ext = path.extname(file.name).toLowerCase();
-    if (!ALLOWED_EXTS.includes(ext)) return NextResponse.json({ error: 'ไฟล์ไม่รองรับ' }, { status: 400 });
+    for (const file of files) {
+      const ext = path.extname(file.name).toLowerCase();
+      if (!ALLOWED_EXTS.includes(ext)) return NextResponse.json({ error: `ไฟล์ "${file.name}" ไม่รองรับ` }, { status: 400 });
+    }
 
     const data = JSON.parse(orderDataStr);
     const order = await createOrder(data, user.userId);
 
-    const filename = `${genId()}${ext}`;
-    const fileType = ext === '.pdf' ? 'PDF' : ext.startsWith('.doc') ? 'WORD' : 'EXCEL';
-    const blobUrl = await uploadFile(file, filename);
-    await createAttachment(
-      order.id,
-      { filename, originalName: file.name, fileType, blobUrl, size: file.size },
-      user.userId,
-    );
+    for (const file of files) {
+      const ext = path.extname(file.name).toLowerCase();
+      const filename = `${genId()}${ext}`;
+      const fileType = ext === '.pdf' ? 'PDF' : ext.startsWith('.doc') ? 'WORD' : 'EXCEL';
+      const blobUrl = await uploadFile(file, filename);
+      await createAttachment(
+        order.id,
+        { filename, originalName: file.name, fileType, blobUrl, size: file.size },
+        user.userId,
+      );
+    }
 
-    // Return order with attachment
     const { getOrder } = await import('@/db/queries');
     const full = await getOrder(order.id);
     return NextResponse.json(full, { status: 201 });
