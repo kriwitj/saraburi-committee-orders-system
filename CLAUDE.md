@@ -76,7 +76,7 @@ thYear('2025')             // "2568"
 ## 🚫 สิ่งที่ไม่ควรทำ
 
 - **อย่า** ใช้ `pages/` directory — โปรเจกต์ใช้ App Router เท่านั้น
-- **อย่า** เก็บไฟล์ใน local filesystem ใน production — ใช้ Vercel Blob
+- **อย่า** import `@neondatabase/serverless` หรือ `@vercel/blob` — ถูกเอาออกแล้ว ใช้ `pg` + local storage แทน
 - **อย่า** ใช้ raw SQL ตรงๆ — ใช้ Drizzle ORM
 - **อย่า** ลืม check role ก่อน mutation (ADMIN/EDITOR)
 - **อย่า** ใช้ `cookies()` หรือ `headers()` โดยไม่ `await` (Next.js 16)
@@ -101,8 +101,7 @@ npm run db:push  # ตรวจสอบ schema sync
 | Package | ใช้ทำอะไร |
 |---|---|
 | `drizzle-orm` | ORM สำหรับ PostgreSQL |
-| `@neondatabase/serverless` | Neon PostgreSQL connection |
-| `@vercel/blob` | File storage |
+| `pg` | Node.js PostgreSQL driver (connection pool) |
 | `jose` | JWT sign/verify |
 | `bcryptjs` | Password hashing |
 | `docx` | Export Word documents |

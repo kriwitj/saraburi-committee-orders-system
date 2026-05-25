@@ -1,0 +1,59 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+# SAROrders — Docker Compose สำหรับ Ubuntu Server
+#
+# การใช้งาน:
+#   1. cp .env.example .env && nano .env   (แก้ไข secrets)
+#   2. docker compose up -d                (รัน background)
+#   3. docker compose exec app npm run db:push  (sync schema ครั้งแรก)
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ──── PostgreSQL Database ──────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: sarorders-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sarorders
+      POSTGRES_USER: sarorders
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?กรุณาตั้ง DB_PASSWORD ใน .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"   # เปิดเฉพาะ localhost (ไม่ expose ออก internet)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sarorders -d sarorders"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ──── Next.js Application ─────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sarorders-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://sarorders:${DB_PASSWORD}@db:5432/sarorders
+      DATABASE_SSL: "false"
+      JWT_SECRET: ${JWT_SECRET:?กรุณาตั้ง JWT_SECRET ใน .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+# ──── Named Volumes ────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: sarorders_postgres_data
+  uploads:
+    name: sarorders_uploads

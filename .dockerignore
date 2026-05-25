@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Next.js build output
+.next/
+out/
+
+# Environment files (อย่า copy ขึ้น image)
+.env
+.env.local
+.env.production
+
+# Development files
+.git/
+.gitignore
+*.md
+.eslintrc*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploads (จะ mount volume แทน)
+uploads/
+
+# Drizzle Studio cache
+drizzle/

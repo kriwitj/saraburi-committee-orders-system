@@ -1,7 +1,7 @@
 # 📋 ระบบคำสั่งจังหวัดสระบุรี (SAROrders)
 
-ระบบบริหารจัดการคำสั่งแต่งตั้งคณะกรรมการ คณะทำงาน และคณะอนุกรรมการ ของจังหวัดสระบุรี
-พัฒนาด้วย **Next.js 16** + **PostgreSQL (Neon)** + **Vercel Blob Storage**
+ระบบบริหารจัดการคำสั่งแต่งตั้งคณะกรรมการ คณะทำงาน และคณะอนุกรรมการ ของจังหวัดสระบุรี  
+พัฒนาด้วย **Next.js 16** + **PostgreSQL** + **Local File Storage**
 
 ---
 
@@ -11,7 +11,7 @@
 |---|---|
 | 📋 จัดการคำสั่ง | สร้าง แก้ไข ยกเลิก และติดตามสถานะคำสั่ง |
 | 👥 รายชื่อคณะ | บริหารจัดการคณะย่อยและรายชื่อกรรมการในแต่ละคณะ |
-| 📎 แนบไฟล์ | อัปโหลด PDF / Word / Excel พร้อมดาวน์โหลดผ่าน Vercel Blob |
+| 📎 แนบไฟล์ | อัปโหลด PDF / Word / Excel พร้อมดาวน์โหลดผ่าน local storage |
 | 📊 ส่งออกเอกสาร | Export รายชื่อคณะกรรมการเป็นไฟล์ Word (`.docx`) หรือ Excel (`.xlsx`) |
 | 🔐 ระบบสิทธิ์ | 3 ระดับ: ADMIN / EDITOR / VIEWER พร้อม JWT Authentication |
 | 🔍 ค้นหา | ค้นหาคำสั่งพร้อม filter ละเอียดตามประเภท / หน่วยงาน / ปี |
@@ -26,12 +26,13 @@
 | Framework | [Next.js 16](https://nextjs.org) (App Router) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS v4 |
-| Database | PostgreSQL via [Neon Serverless](https://neon.tech) |
+| Database | PostgreSQL 16 |
 | ORM | [Drizzle ORM](https://orm.drizzle.team) |
-| File Storage | [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) |
+| File Storage | Local filesystem (configurable via `UPLOAD_DIR`) |
 | Auth | JWT (`jose`) + bcryptjs |
 | Export | `docx` (Word) · `xlsx` (Excel) |
 | State | Zustand |
+| Deploy | Docker Compose + Nginx |
 
 ---
 
@@ -69,21 +70,22 @@ sarorders/
 ├── db/                         # Database layer
 │   ├── schema.ts               # Drizzle schema (tables)
 │   ├── queries.ts              # Database queries
-│   └── index.ts                # DB connection
+│   └── index.ts                # DB connection (pg Pool)
 ├── lib/                        # Utilities
 │   ├── auth.ts                 # JWT auth helpers
 │   ├── exportPdf.ts            # Export PDF
 │   ├── exportWord.ts           # Export Word (.docx)
-│   ├── storage.ts              # Vercel Blob helpers
+│   ├── storage.ts              # Local file storage helpers
 │   └── utils.ts                # Thai date format, helpers
 ├── types/                      # TypeScript types
 │   └── index.ts                # Shared types & constants
-├── data/                       # Static data
-├── scripts/                    # Utility scripts
-├── uploads/                    # Local file uploads (dev)
+├── uploads/                    # ไฟล์แนบ (dev) / mount volume (prod)
+├── Dockerfile                  # Multi-stage Docker build
+├── docker-compose.yml          # PostgreSQL + App services
+├── nginx.conf                  # ตัวอย่าง Nginx reverse proxy config
 ├── .env.example                # ตัวอย่าง environment variables
 ├── drizzle.config.ts           # Drizzle ORM config
-└── next.config.ts              # Next.js config
+└── next.config.ts              # Next.js config (output: standalone)
 ```
 
 ---
@@ -152,7 +154,7 @@ sarorders/
 | `filename` | text | ชื่อไฟล์ (stored) |
 | `original_name` | text | ชื่อไฟล์ต้นฉบับ |
 | `file_type` | text | `PDF` / `WORD` / `EXCEL` |
-| `blob_url` | text | URL จาก Vercel Blob |
+| `blob_url` | text | URL ของไฟล์ (`/api/files/...`) |
 | `size` | integer | ขนาดไฟล์ (bytes) |
 
 ---
@@ -168,7 +170,7 @@ sarorders/
 
 ---
 
-## 🚀 การติดตั้งและรันโปรเจกต์
+## 🚀 การติดตั้งสำหรับ Development
 
 ### 1. Clone & ติดตั้ง dependencies
 
@@ -178,7 +180,29 @@ cd sarorders
 npm install
 ```
 
-### 2. ตั้งค่า Environment Variables
+### 2. เตรียม PostgreSQL
+
+**วิธีที่ 1 — ใช้ Docker (แนะนำ):**
+```bash
+docker run -d \
+  --name sarorders-dev-db \
+  -e POSTGRES_DB=sarorders \
+  -e POSTGRES_USER=sarorders \
+  -e POSTGRES_PASSWORD=devpassword \
+  -p 5432:5432 \
+  postgres:16-alpine
+```
+
+**วิธีที่ 2 — ติดตั้ง PostgreSQL บนเครื่อง:**
+```bash
+# Ubuntu/Debian
+sudo apt install postgresql postgresql-contrib
+sudo -u postgres createuser sarorders --createdb
+sudo -u postgres createdb sarorders --owner=sarorders
+sudo -u postgres psql -c "ALTER USER sarorders WITH PASSWORD 'devpassword';"
+```
+
+### 3. ตั้งค่า Environment Variables
 
 ```bash
 cp .env.example .env
@@ -187,26 +211,19 @@ cp .env.example .env
 แก้ไขไฟล์ `.env`:
 
 ```env
-# PostgreSQL connection string จาก Neon
-DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
-
-# JWT Secret (สุ่มค่าที่ปลอดภัยสำหรับ production)
-JWT_SECRET=your-super-secret-jwt-key-here
-
-# Vercel Blob Storage Token
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
-
-# URL ของแอปพลิเคชัน
+DATABASE_URL=postgresql://sarorders:devpassword@localhost:5432/sarorders
+DATABASE_SSL=false
+JWT_SECRET=dev-secret-replace-in-production
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-### 3. สร้างตาราง Database
+### 4. สร้างตาราง Database
 
 ```bash
 npm run db:push
 ```
 
-### 4. รัน Development Server
+### 5. รัน Development Server
 
 ```bash
 npm run dev
@@ -214,10 +231,146 @@ npm run dev
 
 เปิดเบราว์เซอร์ที่ [http://localhost:3000](http://localhost:3000)
 
-### 5. ดู Database ด้วย Drizzle Studio
+> **Default Admin Account** — ระบบจะสร้าง admin user อัตโนมัติเมื่อ database ว่าง  
+> ตรวจสอบ seed data ใน [`db/queries.ts`](./db/queries.ts) ฟังก์ชัน `seedIfEmpty()`
+
+---
+
+## 🚢 Deploy บน Ubuntu Server (Docker Compose)
+
+### ความต้องการของระบบ
+
+- Ubuntu 22.04 LTS หรือใหม่กว่า
+- Docker Engine 24.x+
+- Docker Compose v2.x+
+- Nginx (สำหรับ reverse proxy)
+
+### ขั้นตอนการ Deploy
+
+#### 1. ติดตั้ง Docker บน Ubuntu
 
 ```bash
-npm run db:studio
+# ติดตั้ง Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# ตรวจสอบ
+docker --version
+docker compose version
+```
+
+#### 2. Clone โปรเจกต์ไปยัง server
+
+```bash
+git clone <repository-url> /opt/sarorders
+cd /opt/sarorders
+```
+
+#### 3. ตั้งค่า Environment Variables
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+แก้ไขค่าต่อไปนี้ใน `.env`:
+
+```env
+# สร้าง password ที่แข็งแกร่ง
+DB_PASSWORD=your-strong-database-password
+
+# สร้าง JWT secret ที่ปลอดภัย
+# วิธีสร้าง: openssl rand -base64 32
+JWT_SECRET=your-super-secret-jwt-key-here
+
+# URL ของ server
+NEXTAUTH_URL=https://your-domain.com
+```
+
+> ⚠️ **สำคัญ:** อย่าใช้ค่า default ใน production! เปลี่ยน `DB_PASSWORD` และ `JWT_SECRET` ทุกครั้ง
+
+#### 4. Build และรัน containers
+
+```bash
+# Build image และรัน services
+docker compose up -d --build
+
+# ดู logs
+docker compose logs -f app
+
+# ตรวจสอบ status
+docker compose ps
+```
+
+#### 5. Sync database schema (ครั้งแรกเท่านั้น)
+
+```bash
+docker compose exec app npx drizzle-kit push
+```
+
+#### 6. ตั้งค่า Nginx Reverse Proxy
+
+```bash
+# คัดลอก nginx config
+sudo cp nginx.conf /etc/nginx/sites-available/sarorders
+
+# แก้ไข domain name
+sudo nano /etc/nginx/sites-available/sarorders
+
+# Enable site
+sudo ln -s /etc/nginx/sites-available/sarorders /etc/nginx/sites-enabled/
+
+# Test และ reload
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+#### 7. (ทางเลือก) ติดตั้ง SSL Certificate ด้วย Let's Encrypt
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
+
+---
+
+## 🔄 อัปเดตโปรเจกต์
+
+```bash
+cd /opt/sarorders
+
+# ดึงโค้ดล่าสุด
+git pull
+
+# Rebuild และ restart
+docker compose up -d --build
+
+# (ถ้ามีการเปลี่ยน schema)
+docker compose exec app npx drizzle-kit push
+```
+
+---
+
+## 💾 การสำรองข้อมูล
+
+### Backup PostgreSQL
+
+```bash
+# Backup database
+docker compose exec db pg_dump -U sarorders sarorders > backup_$(date +%Y%m%d).sql
+
+# Restore database
+docker compose exec -T db psql -U sarorders sarorders < backup_20250101.sql
+```
+
+### Backup ไฟล์แนบ
+
+```bash
+# Backup uploads volume
+docker run --rm \
+  -v sarorders_uploads:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/uploads_$(date +%Y%m%d).tar.gz -C /data .
 ```
 
 ---
@@ -279,20 +432,15 @@ npm run db:studio
 
 ---
 
-## 🚢 การ Deploy
+## 🔧 Environment Variables Reference
 
-### Deploy บน Vercel
-
-1. Push โค้ดขึ้น GitHub
-2. เชื่อมต่อ repository กับ [Vercel](https://vercel.com)
-3. ตั้งค่า Environment Variables ใน Vercel Dashboard:
-   - `DATABASE_URL` — PostgreSQL connection string (Neon)
-   - `JWT_SECRET` — Secret key สำหรับ JWT
-   - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token
-4. Deploy!
-
-> **หมายเหตุ:** โปรเจกต์นี้ใช้ Next.js 16 ซึ่งมี breaking changes จากเวอร์ชันก่อนหน้า
-> ดูไฟล์ [AGENTS.md](./AGENTS.md) สำหรับข้อมูลเพิ่มเติมสำหรับ AI agents
+| Variable | Required | Default | Description |
+|---|:---:|---|---|
+| `DATABASE_URL` | ✅ | — | PostgreSQL connection string |
+| `DATABASE_SSL` | — | `false` | เปิด SSL สำหรับ DB connection |
+| `JWT_SECRET` | ✅ | — | Secret สำหรับ sign JWT tokens |
+| `UPLOAD_DIR` | — | `./uploads` | โฟลเดอร์เก็บไฟล์แนบ |
+| `NEXTAUTH_URL` | — | `http://localhost:3000` | URL ของแอปพลิเคชัน |
 
 ---
 
@@ -306,4 +454,4 @@ npm run db:studio
 
 ## 📄 License
 
-Private — จังหวัดสระบุรี © 2025
+Private — จังหวัดสระบุรี © 2568
