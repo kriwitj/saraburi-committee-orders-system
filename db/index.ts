@@ -2,17 +2,37 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is not set');
+type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+
+let _db: DrizzleDb | undefined;
+
+/**
+ * Lazy initialization — สร้าง Pool เฉพาะตอนใช้งานจริง
+ * ทำให้ `next build` ผ่านได้โดยไม่ต้องมี DATABASE_URL ตอน build time
+ */
+function initDb(): DrizzleDb {
+  if (!_db) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error('DATABASE_URL environment variable is not set');
+
+    const pool = new Pool({
+      connectionString: url,
+      // เปิด SSL เมื่อ DATABASE_SSL=true (สำหรับ cloud PostgreSQL)
+      ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
+
+    _db = drizzle(pool, { schema });
+  }
+  return _db;
 }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // เปิด SSL เมื่อ DATABASE_SSL=true (สำหรับกรณี PostgreSQL บน cloud ที่ต้องการ SSL)
-  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  max: 10,            // จำนวน connection สูงสุดใน pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+// Proxy ให้ใช้งานเหมือนเดิม (db.select, db.insert, ฯลฯ)
+// โดยไม่ต้องแก้ไข queries.ts หรือไฟล์อื่น
+export const db: DrizzleDb = new Proxy({} as DrizzleDb, {
+  get(_, prop: string | symbol) {
+    return initDb()[prop as keyof DrizzleDb];
+  },
 });
-
-export const db = drizzle(pool, { schema });

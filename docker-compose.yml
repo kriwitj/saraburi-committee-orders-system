@@ -1,64 +1,16 @@
 version: "3.9"
 
 # ─────────────────────────────────────────────────────────────
-# SAROrders — Docker Compose สำหรับ Ubuntu Server + Traefik
+# SAROrders — Docker Compose สำหรับ Ubuntu Server
+# Traefik proxy ที่ proxy_net รันแยกอยู่แล้วที่ /opt/apps/proxy
 #
 # การใช้งานครั้งแรก:
-#   1. cp .env.example .env && nano .env        (แก้ไข secrets + domain)
-#   2. mkdir -p letsencrypt && touch letsencrypt/acme.json
-#      chmod 600 letsencrypt/acme.json           (Traefik ต้องการ permission นี้)
-#   3. docker compose up -d                     (รัน background)
-#   4. docker compose exec app npx drizzle-kit push  (sync schema ครั้งแรก)
+#   1. cp .env.example .env && nano .env
+#   2. docker compose up -d --build
+#   3. docker compose exec app npx drizzle-kit push
 # ─────────────────────────────────────────────────────────────
 
 services:
-  # ──── Traefik Reverse Proxy ────────────────────────────────
-  traefik:
-    image: traefik:v3.3
-    container_name: sarorders-traefik
-    restart: unless-stopped
-    command:
-      # API dashboard (เปิดใช้ debug เฉพาะตอน dev ถ้าต้องการ)
-      - "--api.dashboard=true"
-      - "--api.insecure=false"
-      # Docker provider — auto-discover services ผ่าน labels
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=sarorders-net"
-      # Entrypoints
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      # Redirect HTTP → HTTPS โดยอัตโนมัติ
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
-      # Let's Encrypt (ACME) — สร้าง SSL certificate อัตโนมัติ
-      - "--certificatesresolvers.le.acme.tlschallenge=true"
-      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL:?กรุณาตั้ง ACME_EMAIL ใน .env}"
-      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
-      # Log level
-      - "--log.level=INFO"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      # mount Docker socket ให้ Traefik อ่าน container labels
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      # เก็บ SSL certificates
-      - ./letsencrypt:/letsencrypt
-    networks:
-      - sarorders-net
-    labels:
-      # เปิด Traefik dashboard ที่ traefik.your-domain.com (Basic Auth)
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:?กรุณาตั้ง DOMAIN ใน .env}`)"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=le"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
-      # Basic Auth: สร้างด้วย: echo $(htpasswd -nB admin) | sed -e 's/\$/\$\$/g'
-      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
-
   # ──── PostgreSQL Database ──────────────────────────────────
   db:
     image: postgres:16-alpine
@@ -67,11 +19,11 @@ services:
     environment:
       POSTGRES_DB: sarorders
       POSTGRES_USER: sarorders
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?กรุณาตั้ง DB_PASSWORD ใน .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"   # เปิดเฉพาะ localhost
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sarorders -d sarorders"]
       interval: 10s
@@ -88,13 +40,12 @@ services:
       dockerfile: Dockerfile
     container_name: sarorders-app
     restart: unless-stopped
-    # ไม่ expose port ตรง — ให้ Traefik เป็น gateway แทน
     expose:
       - "3000"
     environment:
       DATABASE_URL: postgresql://sarorders:${DB_PASSWORD}@db:5432/sarorders
       DATABASE_SSL: "false"
-      JWT_SECRET: ${JWT_SECRET:?กรุณาตั้ง JWT_SECRET ใน .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       NEXTAUTH_URL: https://${DOMAIN}
       UPLOAD_DIR: /app/uploads
     volumes:
@@ -103,19 +54,25 @@ services:
       db:
         condition: service_healthy
     networks:
-      - sarorders-net
+      - sarorders-net   # คุยกับ db
+      - proxy_net       # ให้ Traefik กลาง discover ได้
     labels:
       - "traefik.enable=true"
-      # Route: your-domain.com → app:3000
+      - "traefik.docker.network=proxy_net"
+      # Route: DOMAIN → app:3000
       - "traefik.http.routers.sarorders.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.sarorders.entrypoints=websecure"
+      - "traefik.http.routers.sarorders.tls=true"
       - "traefik.http.routers.sarorders.tls.certresolver=le"
       - "traefik.http.services.sarorders.loadbalancer.server.port=3000"
 
-# ──── Network ──────────────────────────────────────────────
+# ──── Networks ─────────────────────────────────────────────
 networks:
   sarorders-net:
     name: sarorders-net
+  proxy_net:
+    external: true      # ใช้ network ที่ Traefik สร้างไว้แล้ว
+    name: proxy_net
 
 # ──── Named Volumes ────────────────────────────────────────
 volumes:

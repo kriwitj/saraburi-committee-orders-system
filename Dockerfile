@@ -19,6 +19,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Dummy DATABASE_URL สำหรับ build phase เท่านั้น
+# ค่าจริงถูก inject ตอน runtime ผ่าน docker-compose env
+ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
+ENV DATABASE_URL=$DATABASE_URL
+
 # Build Next.js app (output: standalone)
 RUN npm run build
 
