@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ─────────────────────────────────────────────────────────────
 # SAROrders — Docker Compose สำหรับ Ubuntu Server
 # Traefik proxy ที่ proxy_net รันแยกอยู่แล้วที่ /opt/apps/proxy
@@ -7,7 +5,7 @@ version: "3.9"
 # การใช้งานครั้งแรก:
 #   1. cp .env.example .env && nano .env
 #   2. docker compose up -d --build
-#   3. docker compose exec app npx drizzle-kit push
+#   3. docker compose run --rm migrate   (sync database schema)
 # ─────────────────────────────────────────────────────────────
 
 services:
@@ -32,6 +30,23 @@ services:
       start_period: 20s
     networks:
       - sarorders-net
+
+  # ──── Database Migration (รันครั้งเดียว แล้วลบ container ทิ้ง) ───
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    container_name: sarorders-migrate
+    environment:
+      DATABASE_URL: postgresql://sarorders:${DB_PASSWORD}@db:5432/sarorders
+      DATABASE_SSL: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sarorders-net
+    profiles:
+      - migrate   # ไม่รันพร้อม `docker compose up` ปกติ
 
   # ──── Next.js Application ─────────────────────────────────
   app:

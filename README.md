@@ -236,108 +236,149 @@ npm run dev
 
 ---
 
-## 🚢 Deploy บน Ubuntu Server (Docker Compose)
+## 🚢 Deploy บน Ubuntu Server
+
+### สถาปัตยกรรม
+
+```
+Internet (80/443)
+      │
+  [Traefik]  /opt/apps/proxy  ← SSL Let's Encrypt + reverse proxy กลาง
+      │  proxy_net (Docker network)
+  [sarorders-app:3000]        ← Next.js app (container)
+      │  sarorders-net
+  [sarorders-db:5432]         ← PostgreSQL (container)
+```
+
+- **Traefik** รันเป็น service กลางที่ `/opt/apps/proxy` ดูแล SSL และ routing ให้ทุก app
+- **proxy_net** คือ Docker network ที่ Traefik ใช้ discover services ผ่าน container labels
+- **Let's Encrypt** ออก SSL certificate อัตโนมัติผ่าน HTTP challenge
+
+---
 
 ### ความต้องการของระบบ
 
 - Ubuntu 22.04 LTS หรือใหม่กว่า
-- Docker Engine 24.x+
-- Docker Compose v2.x+
-- Nginx (สำหรับ reverse proxy)
+- Docker Engine 24.x+ และ Docker Compose v2.x+
+- Domain พร้อม DNS A record ชี้มาที่ server IP (**ต้องปิด Cloudflare proxy**)
+- Port 80 และ 443 เปิดอยู่
 
-### ขั้นตอนการ Deploy
+---
 
-#### 1. ติดตั้ง Docker บน Ubuntu
+### ขั้นตอนที่ 1 — ตั้งค่า Traefik Proxy (ทำครั้งเดียว)
 
-```bash
-# ติดตั้ง Docker
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-newgrp docker
-
-# ตรวจสอบ
-docker --version
-docker compose version
-```
-
-#### 2. Clone โปรเจกต์ไปยัง server
+> ถ้า Traefik รันอยู่แล้วที่ `/opt/apps/proxy` ข้ามขั้นตอนนี้ได้
 
 ```bash
-git clone <repository-url> /opt/sarorders
-cd /opt/sarorders
+# สร้าง external network ที่ใช้ร่วมกัน
+docker network create proxy_net
+
+# สร้าง directory
+mkdir -p /opt/apps/proxy
+cd /opt/apps/proxy
 ```
 
-#### 3. ตั้งค่า Environment Variables
+สร้างไฟล์ `/opt/apps/proxy/docker-compose.yml`:
+
+```yaml
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: proxy-traefik-1
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy_net
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - proxy_net
+
+networks:
+  proxy_net:
+    external: true
+    name: proxy_net
+```
+
+```bash
+# สร้าง acme.json (permission 600 สำคัญมาก!)
+mkdir -p letsencrypt && touch letsencrypt/acme.json
+chmod 600 letsencrypt/acme.json
+
+# ตั้งค่า email สำหรับ Let's Encrypt
+echo "ACME_EMAIL=admin@your-domain.com" > .env
+
+# รัน Traefik
+docker compose up -d
+```
+
+> ⚠️ **DNS**: domain ต้องชี้ตรงมาที่ server IP โดยไม่ผ่าน Cloudflare proxy (grey cloud)
+
+---
+
+### ขั้นตอนที่ 2 — Deploy SAROrders
+
+#### 2.1 Clone โปรเจกต์
+
+```bash
+git clone <repository-url> /opt/apps/saraburi-committee-orders-system
+cd /opt/apps/saraburi-committee-orders-system
+```
+
+#### 2.2 ตั้งค่า Environment Variables
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-แก้ไขค่าต่อไปนี้ใน `.env`:
-
 ```env
-# สร้าง password ที่แข็งแกร่ง
-DB_PASSWORD=your-strong-database-password
-
-# สร้าง JWT secret ที่ปลอดภัย
-# วิธีสร้าง: openssl rand -base64 32
-JWT_SECRET=your-super-secret-jwt-key-here
-
-# URL ของ server
-NEXTAUTH_URL=https://your-domain.com
+DOMAIN=orders.your-domain.com
+NEXTAUTH_URL=https://orders.your-domain.com
+DB_PASSWORD=your-strong-password         # openssl rand -base64 24
+JWT_SECRET=your-super-secret-jwt-key     # openssl rand -base64 32
 ```
 
-> ⚠️ **สำคัญ:** อย่าใช้ค่า default ใน production! เปลี่ยน `DB_PASSWORD` และ `JWT_SECRET` ทุกครั้ง
-
-#### 4. Build และรัน containers
+#### 2.3 Build และรัน
 
 ```bash
-# Build image และรัน services
 docker compose up -d --build
 
-# ดู logs
-docker compose logs -f app
-
-# ตรวจสอบ status
+# ตรวจสอบ
 docker compose ps
+docker compose logs -f app
 ```
 
-#### 5. Sync database schema (ครั้งแรกเท่านั้น)
+#### 2.4 Sync database schema (ครั้งแรกเท่านั้น)
 
 ```bash
-docker compose exec app npx drizzle-kit push
+docker compose run --rm migrate
 ```
 
-#### 6. ตั้งค่า Nginx Reverse Proxy
+> `migrate` service ใช้ `Dockerfile.migrate` ที่รวม drizzle-kit ไว้ รัน push แล้วลบ container ทิ้งอัตโนมัติ (`--rm`)  
+> ไม่ได้รันพร้อม `docker compose up` ปกติ เพราะใช้ `profiles: [migrate]`
 
-```bash
-# คัดลอก nginx config
-sudo cp nginx.conf /etc/nginx/sites-available/sarorders
-
-# แก้ไข domain name
-sudo nano /etc/nginx/sites-available/sarorders
-
-# Enable site
-sudo ln -s /etc/nginx/sites-available/sarorders /etc/nginx/sites-enabled/
-
-# Test และ reload
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-#### 7. (ทางเลือก) ติดตั้ง SSL Certificate ด้วย Let's Encrypt
-
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
+เปิดเบราว์เซอร์ที่ `https://orders.your-domain.com` — Traefik จะออก SSL certificate อัตโนมัติภายใน 1-2 นาที
 
 ---
 
 ## 🔄 อัปเดตโปรเจกต์
 
 ```bash
-cd /opt/sarorders
+cd /opt/apps/saraburi-committee-orders-system
 
 # ดึงโค้ดล่าสุด
 git pull
@@ -346,7 +387,28 @@ git pull
 docker compose up -d --build
 
 # (ถ้ามีการเปลี่ยน schema)
-docker compose exec app npx drizzle-kit push
+docker compose run --rm migrate
+```
+
+---
+
+## 🔍 Troubleshooting
+
+```bash
+# ดู log ของ app
+docker compose logs -f app
+
+# ดู Traefik routing และ SSL cert
+docker logs proxy-traefik-1 2>&1 | grep -i "your-domain\|acme\|error"
+
+# ตรวจสอบ app อยู่ใน proxy_net ไหม
+docker network inspect proxy_net | grep sarorders
+
+# ถ้าไม่อยู่ใน proxy_net
+docker network connect proxy_net sarorders-app
+
+# ทดสอบ HTTP routing ผ่าน Traefik
+curl -H "Host: orders.your-domain.com" http://localhost
 ```
 
 ---
@@ -356,17 +418,18 @@ docker compose exec app npx drizzle-kit push
 ### Backup PostgreSQL
 
 ```bash
-# Backup database
+cd /opt/apps/saraburi-committee-orders-system
+
+# Backup
 docker compose exec db pg_dump -U sarorders sarorders > backup_$(date +%Y%m%d).sql
 
-# Restore database
+# Restore
 docker compose exec -T db psql -U sarorders sarorders < backup_20250101.sql
 ```
 
 ### Backup ไฟล์แนบ
 
 ```bash
-# Backup uploads volume
 docker run --rm \
   -v sarorders_uploads:/data \
   -v $(pwd):/backup \
