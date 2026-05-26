@@ -14,4 +14,4 @@ COPY db/       ./db/
 COPY drizzle.config.ts ./
 COPY tsconfig.json ./
 
-CMD ["npx", "drizzle-kit", "push"]
+CMD ["npx", "drizzle-kit", "push", "--force"]
