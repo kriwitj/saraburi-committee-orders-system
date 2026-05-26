@@ -63,7 +63,7 @@ services:
       - "traefik.http.routers.sarorders.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.sarorders.entrypoints=websecure"
       - "traefik.http.routers.sarorders.tls=true"
-      - "traefik.http.routers.sarorders.tls.certresolver=le"
+      - "traefik.http.routers.sarorders.tls.certresolver=letsencrypt"
       - "traefik.http.services.sarorders.loadbalancer.server.port=3000"
 
 # ──── Networks ─────────────────────────────────────────────
