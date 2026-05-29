@@ -6,13 +6,14 @@ import { db } from '@/db/index';
 import { attachments } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ attId: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ attId: string }> }) {
   try {
     const { attId } = await params;
     const [att] = await db.select().from(attachments).where(eq(attachments.id, attId));
     if (!att) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    // Redirect to Vercel Blob URL for download
-    return NextResponse.redirect(att.blobUrl);
+    // แปลง relative URL → absolute URL ก่อน redirect
+    const fileUrl = new URL(att.blobUrl, req.url);
+    return NextResponse.redirect(fileUrl);
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 }
 
