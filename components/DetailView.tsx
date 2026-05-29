@@ -120,12 +120,12 @@ export function DetailView({ order, onBack, onRefresh }: Props) {
           </div>
 
           <div className="flex flex-wrap gap-2 flex-shrink-0">
-            <a href={`/api/orders/${order.id}/export?format=pdf`} target="_blank" rel="noreferrer">
+            {/* <a href={`/api/orders/${order.id}/export?format=pdf`} target="_blank" rel="noreferrer">
               <Btn size="sm" variant="secondary">📄 พิมพ์ PDF</Btn>
             </a>
             <a href={`/api/orders/${order.id}/export?format=word`} download>
               <Btn size="sm" variant="secondary">📝 ดาวน์โหลด Word</Btn>
-            </a>
+            </a> */}
             {canEdit && (
               <>
                 <Btn size="sm" variant="secondary" onClick={() => setModal('editOrder')}>✏️ แก้ไข</Btn>

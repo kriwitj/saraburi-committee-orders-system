@@ -42,7 +42,7 @@ export function AdminLayout({ children, title }: Props) {
       >
         {/* Brand */}
         <div className="px-5 py-4 border-b border-slate-700/60 flex-shrink-0">
-          <Link href="/orders" onClick={closeSidebar} className="flex items-center gap-3 group">
+          <Link href="/" onClick={closeSidebar} className="flex items-center gap-3 group">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-lg flex-shrink-0
               group-hover:bg-blue-500 transition-colors shadow-md">
               📋

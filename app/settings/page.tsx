@@ -2,146 +2,280 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth, useSettings } from '@/components/providers';
 import { AdminLayout } from '@/components/AdminLayout';
-import { Btn, Toast, Input } from '@/components/ui';
+import { Btn, Modal, ConfirmModal, Toast, Input, FG } from '@/components/ui';
 import type { Agency } from '@/types';
 
 type Tab = 'types' | 'roles' | 'agencies';
 
-// ── Inline-editable string list (types / roles) ────────────────────
+// ── ตาราง CRUD สำหรับ string list (ประเภทคำสั่ง / บทบาท) ─────────
 function StringList({
-  items, onSave, busy, placeholder,
+  items,
+  onSave,
+  busy,
+  label,
+  placeholder,
 }: {
-  items: string[]; onSave: (next: string[]) => Promise<void>; busy: boolean; placeholder: string;
+  items: string[];
+  onSave: (next: string[]) => Promise<void>;
+  busy: boolean;
+  label: string;
+  placeholder: string;
 }) {
   const [list, setList] = useState(items);
-  const [newVal, setNewVal] = useState('');
+  const [addVal, setAddVal] = useState('');
+  const [dirty, setDirty] = useState(false);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
-  const [dirty, setDirty] = useState(false);
+  const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
 
   useEffect(() => { setList(items); setDirty(false); }, [items]);
 
   function add() {
-    const v = newVal.trim();
+    const v = addVal.trim();
     if (!v || list.includes(v)) return;
-    setList(p => [...p, v]); setNewVal(''); setDirty(true);
+    setList(p => [...p, v]);
+    setAddVal('');
+    setDirty(true);
   }
-  function remove(i: number) { setList(p => p.filter((_, j) => j !== i)); setDirty(true); }
-  function startEdit(i: number) { setEditIdx(i); setEditVal(list[i]); }
-  function saveEdit() {
+
+  function confirmEdit() {
     if (editIdx === null) return;
     const v = editVal.trim();
-    if (!v) { setEditIdx(null); return; }
-    setList(p => { const n = [...p]; n[editIdx] = v; return n; });
-    setEditIdx(null); setDirty(true);
+    if (v && v !== list[editIdx]) {
+      setList(p => { const n = [...p]; n[editIdx] = v; return n; });
+      setDirty(true);
+    }
+    setEditIdx(null);
+  }
+
+  function confirmDelete() {
+    if (deleteIdx === null) return;
+    setList(p => p.filter((_, j) => j !== deleteIdx));
+    setDeleteIdx(null);
+    setDirty(true);
   }
 
   return (
     <div>
-      <div className="space-y-2 mb-4 max-h-72 overflow-y-auto pr-1">
-        {list.length === 0 && <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีรายการ</p>}
-        {list.map((item, i) => (
-          <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 group hover:bg-gray-100 transition-colors">
-            {editIdx === i ? (
-              <>
-                <input value={editVal} onChange={e => setEditVal(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditIdx(null); }}
-                  autoFocus
-                  className="flex-1 border border-blue-400 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                <button onClick={saveEdit} className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer px-1 text-sm">✓</button>
-                <button onClick={() => setEditIdx(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer px-1 text-sm">✕</button>
-              </>
-            ) : (
-              <>
-                <span className="flex-1 text-sm">{item}</span>
-                <button onClick={() => startEdit(i)}
-                  className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 text-xs cursor-pointer transition-opacity px-1">✏️</button>
-                <button onClick={() => remove(i)}
-                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 cursor-pointer transition-opacity px-1 text-sm">✕</button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
       <div className="flex gap-2 mb-4">
-        <Input value={newVal} onChange={e => setNewVal(e.target.value)} placeholder={placeholder}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') add(); }} />
+        <Input
+          value={addVal}
+          onChange={e => setAddVal(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') add(); }}
+        />
         <Btn size="sm" variant="secondary" onClick={add}>+ เพิ่ม</Btn>
       </div>
-      {dirty && <Btn onClick={() => onSave(list)} loading={busy}>💾 บันทึกการเปลี่ยนแปลง</Btn>}
+
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        {list.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">ยังไม่มีรายการ</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-gray-600 w-10">#</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-gray-600">{label}</th>
+                <th className="px-4 py-2.5 w-32 text-right font-semibold text-gray-600">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((item, i) => (
+                <tr key={i} className="border-t border-gray-100 hover:bg-blue-50/40 transition-colors">
+                  <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
+                  <td className="px-4 py-2.5 text-gray-800">{item}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex gap-1.5 justify-end">
+                      <Btn size="sm" variant="ghost"
+                        onClick={() => { setEditIdx(i); setEditVal(item); }}
+                        className="text-blue-600 hover:bg-blue-50">
+                        ✏️ แก้ไข
+                      </Btn>
+                      <Btn size="sm" variant="danger" onClick={() => setDeleteIdx(i)}>
+                        🗑 ลบ
+                      </Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {dirty && (
+        <div className="mt-4 flex justify-end">
+          <Btn onClick={() => onSave(list)} loading={busy}>💾 บันทึกการเปลี่ยนแปลง</Btn>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editIdx !== null && (
+        <Modal title={`แก้ไข${label}`} onClose={() => setEditIdx(null)}>
+          <FG label={label} required>
+            <Input
+              autoFocus
+              value={editVal}
+              onChange={e => setEditVal(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') confirmEdit(); }}
+            />
+          </FG>
+          <div className="flex gap-2 justify-end mt-4">
+            <Btn variant="secondary" onClick={() => setEditIdx(null)}>ยกเลิก</Btn>
+            <Btn onClick={confirmEdit}>บันทึก</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirm */}
+      {deleteIdx !== null && (
+        <ConfirmModal
+          text={`ต้องการลบ "${list[deleteIdx]}" ออกจากรายการ?\nการเปลี่ยนแปลงจะมีผลเมื่อกด "บันทึก"`}
+          onConfirm={confirmDelete}
+          onClose={() => setDeleteIdx(null)}
+        />
+      )}
     </div>
   );
 }
 
-// ── Agencies with full CRUD ────────────────────────────────────────
-function AgencyList({ notify }: { notify: (m: string, t?: 'ok'|'err') => void }) {
+// ── ตาราง CRUD สำหรับหน่วยงาน ──────────────────────────────────────
+function AgencyList({ notify }: { notify: (m: string, t?: 'ok' | 'err') => void }) {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<Agency | null>(null);
   const [editVal, setEditVal] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Agency | null>(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch('/api/agencies');
     if (r.ok) setAgencies(await r.json());
   }, []);
+
   useEffect(() => { load(); }, [load]);
 
   async function add() {
-    const name = newName.trim(); if (!name) return;
+    const name = newName.trim();
+    if (!name) return;
     setBusy(true);
-    const r = await fetch('/api/agencies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    const d = await r.json(); setBusy(false);
+    const r = await fetch('/api/agencies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const d = await r.json();
+    setBusy(false);
     if (r.ok) { setNewName(''); load(); notify('เพิ่มหน่วยงานแล้ว'); }
     else notify(d.error || 'เกิดข้อผิดพลาด', 'err');
   }
 
-  async function saveEdit(id: string) {
-    const name = editVal.trim(); if (!name) { setEditId(null); return; }
+  async function saveEdit() {
+    if (!editTarget) return;
+    const name = editVal.trim();
+    if (!name) { setEditTarget(null); return; }
     setBusy(true);
-    const r = await fetch(`/api/agencies/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    setBusy(false); setEditId(null);
-    if (r.ok) { load(); notify('แก้ไขแล้ว'); } else notify('แก้ไขไม่สำเร็จ', 'err');
+    const r = await fetch(`/api/agencies/${editTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    setBusy(false);
+    setEditTarget(null);
+    if (r.ok) { load(); notify('แก้ไขหน่วยงานแล้ว'); }
+    else notify('แก้ไขไม่สำเร็จ', 'err');
   }
 
-  async function del(id: string) {
-    if (!confirm('ต้องการลบหน่วยงานนี้?')) return;
-    const r = await fetch('/api/agencies', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    if (r.ok) { load(); notify('ลบแล้ว'); } else notify('ลบไม่สำเร็จ', 'err');
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDelBusy(true);
+    const r = await fetch('/api/agencies', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: deleteTarget.id }),
+    });
+    setDelBusy(false);
+    setDeleteTarget(null);
+    if (r.ok) { load(); notify('ลบหน่วยงานแล้ว'); }
+    else notify('ลบไม่สำเร็จ', 'err');
   }
 
   return (
     <div>
-      <div className="space-y-2 mb-4 max-h-72 overflow-y-auto pr-1">
-        {agencies.length === 0 && <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีหน่วยงาน</p>}
-        {agencies.map(a => (
-          <div key={a.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 group hover:bg-gray-100 transition-colors">
-            {editId === a.id ? (
-              <>
-                <input value={editVal} onChange={e => setEditVal(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') saveEdit(a.id); if (e.key === 'Escape') setEditId(null); }}
-                  autoFocus
-                  className="flex-1 border border-blue-400 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                <button onClick={() => saveEdit(a.id)} className="text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer px-1 text-sm">✓</button>
-                <button onClick={() => setEditId(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer px-1 text-sm">✕</button>
-              </>
-            ) : (
-              <>
-                <span className="flex-1 text-sm">{a.name}</span>
-                <button onClick={() => { setEditId(a.id); setEditVal(a.name); }}
-                  className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 text-xs cursor-pointer transition-opacity px-1">✏️</button>
-                <button onClick={() => del(a.id)}
-                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 cursor-pointer transition-opacity px-1 text-sm">🗑</button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="ชื่อหน่วยงานใหม่... (Enter)"
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') add(); }} />
+      <div className="flex gap-2 mb-4">
+        <Input
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          placeholder="ชื่อหน่วยงานใหม่..."
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') add(); }}
+        />
         <Btn size="sm" variant="secondary" onClick={add} loading={busy}>+ เพิ่ม</Btn>
       </div>
+
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        {agencies.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">ยังไม่มีหน่วยงาน</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-gray-600 w-10">#</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-gray-600">ชื่อหน่วยงาน</th>
+                <th className="px-4 py-2.5 w-32 text-right font-semibold text-gray-600">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agencies.map((a, i) => (
+                <tr key={a.id} className="border-t border-gray-100 hover:bg-blue-50/40 transition-colors">
+                  <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
+                  <td className="px-4 py-2.5 text-gray-800">{a.name}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex gap-1.5 justify-end">
+                      <Btn size="sm" variant="ghost"
+                        onClick={() => { setEditTarget(a); setEditVal(a.name); }}
+                        className="text-blue-600 hover:bg-blue-50">
+                        ✏️ แก้ไข
+                      </Btn>
+                      <Btn size="sm" variant="danger" onClick={() => setDeleteTarget(a)}>
+                        🗑 ลบ
+                      </Btn>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Edit modal */}
+      {editTarget && (
+        <Modal title="แก้ไขหน่วยงาน" onClose={() => setEditTarget(null)}>
+          <FG label="ชื่อหน่วยงาน" required>
+            <Input
+              autoFocus
+              value={editVal}
+              onChange={e => setEditVal(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') saveEdit(); }}
+            />
+          </FG>
+          <div className="flex gap-2 justify-end mt-4">
+            <Btn variant="secondary" onClick={() => setEditTarget(null)}>ยกเลิก</Btn>
+            <Btn onClick={saveEdit} loading={busy}>บันทึก</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <ConfirmModal
+          text={`ต้องการลบหน่วยงาน "${deleteTarget.name}" ?\nหน่วยงานที่ลบแล้วอาจส่งผลต่อคำสั่งที่ผูกไว้`}
+          onConfirm={confirmDelete}
+          onClose={() => setDeleteTarget(null)}
+          loading={delBusy}
+        />
+      )}
     </div>
   );
 }
@@ -155,14 +289,16 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState(false);
 
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
-    setToast({ msg, type }); setTimeout(() => setToast(null), 3000);
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
   };
 
   if (user?.role !== 'ADMIN') {
     return (
       <AdminLayout title="ตั้งค่าระบบ">
         <div className="max-w-lg mx-auto p-8 text-center text-gray-500 mt-10">
-          <div className="text-4xl mb-3">🔒</div><p>ไม่มีสิทธิ์เข้าถึงหน้านี้</p>
+          <div className="text-4xl mb-3">🔒</div>
+          <p>ไม่มีสิทธิ์เข้าถึงหน้านี้</p>
         </div>
       </AdminLayout>
     );
@@ -170,54 +306,85 @@ export default function SettingsPage() {
 
   async function saveSettings(key: 'orderTypes' | 'memberRoles', values: string[]) {
     setBusy(true);
-    const r = await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: values }) });
+    const r = await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: values }),
+    });
     setBusy(false);
-    if (r.ok) { await reload(); notify('บันทึกแล้ว'); } else notify('เกิดข้อผิดพลาด', 'err');
+    if (r.ok) { await reload(); notify('บันทึกแล้ว'); }
+    else notify('เกิดข้อผิดพลาด', 'err');
   }
 
-  const tabs: [Tab, string][] = [['types', '📋 ประเภทคำสั่ง'], ['roles', '👤 บทบาท'], ['agencies', '🏢 หน่วยงาน']];
+  const tabs: { id: Tab; label: string; count: number | null }[] = [
+    { id: 'types',    label: '📋 ประเภทคำสั่ง', count: settings.orderTypes.length },
+    { id: 'roles',    label: '👤 บทบาท',        count: settings.memberRoles.length },
+    { id: 'agencies', label: '🏢 หน่วยงาน',     count: null },
+  ];
+
+  const tabMeta: Record<Tab, { title: string; sub: string }> = {
+    types:    { title: 'ประเภทของคำสั่ง',  sub: 'ใช้เป็นตัวเลือกเมื่อสร้างคำสั่งใหม่' },
+    roles:    { title: 'บทบาทในคณะ',       sub: 'ใช้เป็นตัวเลือกบทบาทของสมาชิกในแต่ละคณะ' },
+    agencies: { title: 'หน่วยงานในระบบ',   sub: 'หน่วยงานที่ใช้อ้างอิงสำหรับผู้ใช้และคำสั่ง' },
+  };
 
   return (
     <AdminLayout title="ตั้งค่าระบบ">
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="mb-6">
           <h1 className="text-xl font-bold text-gray-900">⚙️ ตั้งค่าข้อมูลตั้งต้น</h1>
+          <p className="text-sm text-gray-500 mt-1">จัดการประเภทคำสั่ง บทบาท และหน่วยงานที่ใช้ในระบบ</p>
         </div>
 
-        <div className="flex gap-1 mb-5 bg-white rounded-xl p-1 shadow-sm w-fit flex-wrap">
-          {tabs.map(([t, l]) => (
-            <button key={t} onClick={() => setActiveTab(t)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-colors
-                ${activeTab === t ? 'bg-blue-700 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-              {l}
+        {/* Tab bar */}
+        <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 shadow-sm w-fit flex-wrap">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-colors flex items-center gap-1.5
+                ${activeTab === t.id ? 'bg-blue-700 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>
+              {t.label}
+              {t.count !== null && (
+                <span className={`text-xs rounded-full px-1.5 py-0.5 font-normal
+                  ${activeTab === t.id ? 'bg-blue-600 text-blue-100' : 'bg-gray-200 text-gray-500'}`}>
+                  {t.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          {activeTab === 'types' && (
-            <>
-              <h2 className="font-bold text-gray-900 mb-1">ประเภทของคำสั่ง</h2>
-              <p className="text-xs text-gray-400 mb-4">hover รายการเพื่อแก้ไขหรือลบ</p>
-              <StringList items={settings.orderTypes} onSave={v => saveSettings('orderTypes', v)} busy={busy} placeholder="เพิ่มประเภทใหม่... (Enter)" />
-            </>
-          )}
-          {activeTab === 'roles' && (
-            <>
-              <h2 className="font-bold text-gray-900 mb-1">บทบาทในคณะ</h2>
-              <p className="text-xs text-gray-400 mb-4">hover รายการเพื่อแก้ไขหรือลบ</p>
-              <StringList items={settings.memberRoles} onSave={v => saveSettings('memberRoles', v)} busy={busy} placeholder="เพิ่มบทบาทใหม่... (Enter)" />
-            </>
-          )}
-          {activeTab === 'agencies' && (
-            <>
-              <h2 className="font-bold text-gray-900 mb-1">หน่วยงานในระบบ</h2>
-              <p className="text-xs text-gray-400 mb-4">hover รายการเพื่อแก้ไขหรือลบ</p>
+        {/* Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">{tabMeta[activeTab].title}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{tabMeta[activeTab].sub}</p>
+          </div>
+          <div className="p-6">
+            {activeTab === 'types' && (
+              <StringList
+                items={settings.orderTypes}
+                onSave={v => saveSettings('orderTypes', v)}
+                busy={busy}
+                label="ประเภทคำสั่ง"
+                placeholder="เพิ่มประเภทใหม่..."
+              />
+            )}
+            {activeTab === 'roles' && (
+              <StringList
+                items={settings.memberRoles}
+                onSave={v => saveSettings('memberRoles', v)}
+                busy={busy}
+                label="บทบาท"
+                placeholder="เพิ่มบทบาทใหม่..."
+              />
+            )}
+            {activeTab === 'agencies' && (
               <AgencyList notify={notify} />
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </AdminLayout>
   );
