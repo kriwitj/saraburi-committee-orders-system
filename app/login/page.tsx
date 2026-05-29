@@ -4,7 +4,7 @@ import { useAuth } from '@/components/providers';
 
 export default function LoginPage() {
   const { login, user, loading } = useAuth();
-  const [email, setEmail] = useState('admin@sarorders.local');
+  const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [err, setErr] = useState('');
@@ -85,12 +85,12 @@ export default function LoginPage() {
             ) : '🔐 เข้าสู่ระบบ'}
           </button>
 
-          <div className="mt-5 p-3 bg-amber-50 rounded-xl border border-amber-100 text-xs text-gray-500">
+          {/* <div className="mt-5 p-3 bg-amber-50 rounded-xl border border-amber-100 text-xs text-gray-500">
             <p className="font-semibold mb-1 text-amber-700">ข้อมูล Admin เริ่มต้น:</p>
             <p>Email: admin@sarorders.local</p>
             <p>Password: Admin@1234</p>
             <p className="mt-1 text-amber-600">⚠️ กรุณาเปลี่ยนรหัสผ่านหลังเข้าใช้งานครั้งแรก</p>
-          </div>
+          </div> */}
         </form>
 
         <p className="text-center mt-5 text-blue-300 text-xs">
