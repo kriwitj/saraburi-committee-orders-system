@@ -26,10 +26,12 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ attId:
       : ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       : 'application/octet-stream';
 
+    const displayName = att.originalName || filename;
     return new NextResponse(buf as unknown as BodyInit, {
       headers: {
         'Content-Type': ct,
-        'Content-Disposition': `inline; filename="${att.originalName || filename}"`,
+        // RFC 5987: รองรับชื่อไฟล์ภาษาไทยและ Unicode ใน HTTP header
+        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(displayName)}`,
       },
     });
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
