@@ -276,6 +276,19 @@ export async function deleteUser(id: string) {
   await db.delete(users).where(eq(users.id, id));
 }
 
+export async function createSSOUser({ email, name }: { email: string; name: string | null }): Promise<typeof users.$inferSelect> {
+  const id = genId();
+  const now = nowIso();
+  await db.insert(users).values({
+    id, email, name,
+    passwordHash: '!sso', // SSO users ไม่มี password — !sso ไม่ใช่ bcrypt hash จึง checkPassword คืน false เสมอ
+    role: 'VIEWER',
+    createdAt: now, updatedAt: now,
+  });
+  const [row] = await db.select().from(users).where(eq(users.id, id));
+  return row;
+}
+
 // ─── Seed (first run) ─────────────────────────────────────────────
 export async function seedIfEmpty(adminHash: string) {
   const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(users);

@@ -57,7 +57,9 @@ export function hashPassword(pw: string): string {
 }
 
 export function checkPassword(pw: string, hash: string): boolean {
-  return bcrypt.compareSync(pw, hash);
+  // SSO users มี hash ที่ไม่ใช่ bcrypt — guard ป้องกัน bcrypt throw
+  if (!hash.startsWith('$2')) return false;
+  try { return bcrypt.compareSync(pw, hash); } catch { return false; }
 }
 
 export const COOKIE_NAME = COOKIE;

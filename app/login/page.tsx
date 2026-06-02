@@ -2,6 +2,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers';
 
+const SSO_ENABLED = process.env.NEXT_PUBLIC_SSO_ENABLED === 'true';
+
+const SSO_ERRORS: Record<string, string> = {
+  sso_failed:         'เข้าสู่ระบบด้วย SSO ไม่สำเร็จ กรุณาลองใหม่',
+  invalid_state:      'เซสชันไม่ถูกต้อง กรุณาลองใหม่',
+  no_email:           'ไม่พบข้อมูลอีเมลจาก Keycloak',
+  sso_not_configured: 'ยังไม่ได้ตั้งค่า SSO',
+  access_denied:      'ไม่ได้รับอนุญาตจาก Keycloak',
+};
+
 export default function LoginPage() {
   const { login, user, loading } = useAuth();
   const [email, setEmail] = useState('');
@@ -14,6 +24,13 @@ export default function LoginPage() {
     if (!loading && user) window.location.href = '/orders';
   }, [user, loading]);
 
+  // แสดง error จาก Keycloak callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const e = params.get('error');
+    if (e) setErr(SSO_ERRORS[e] || `SSO error: ${e}`);
+  }, []);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr('');
@@ -23,7 +40,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-blue-700
+    <div className="min-h-screen bg-linear-to-br from-blue-950 via-blue-900 to-blue-700
       flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
@@ -85,12 +102,29 @@ export default function LoginPage() {
             ) : '🔐 เข้าสู่ระบบ'}
           </button>
 
-          {/* <div className="mt-5 p-3 bg-amber-50 rounded-xl border border-amber-100 text-xs text-gray-500">
-            <p className="font-semibold mb-1 text-amber-700">ข้อมูล Admin เริ่มต้น:</p>
-            <p>Email: admin@sarorders.local</p>
-            <p>Password: Admin@1234</p>
-            <p className="mt-1 text-amber-600">⚠️ กรุณาเปลี่ยนรหัสผ่านหลังเข้าใช้งานครั้งแรก</p>
-          </div> */}
+          {SSO_ENABLED && (
+            <>
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs text-gray-400 bg-white px-3 w-fit mx-auto">
+                  หรือ
+                </div>
+              </div>
+              <a href="/api/auth/keycloak"
+                className="flex items-center justify-center gap-2.5 w-full border border-gray-300
+                  text-gray-700 font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-50
+                  transition-colors cursor-pointer">
+                <svg className="w-5 h-5" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="16" cy="16" r="16" fill="#4A90D9"/>
+                  <path d="M9 10h6l5 6-5 6H9l5-6-5-6z" fill="white"/>
+                  <path d="M17 10h6l-5 6 5 6h-6l-5-6 5-6z" fill="white" opacity="0.6"/>
+                </svg>
+                เข้าสู่ระบบด้วย Keycloak SSO
+              </a>
+            </>
+          )}
         </form>
 
         <p className="text-center mt-5 text-blue-300 text-xs">
