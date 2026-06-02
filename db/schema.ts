@@ -6,6 +6,7 @@ const nowSql = sql`to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH2
 export const agencies = pgTable('agencies', {
   id: text('id').primaryKey(),
   name: text('name').notNull().unique(),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull().default(nowSql),
 });
 

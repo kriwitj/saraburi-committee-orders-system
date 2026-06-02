@@ -3,9 +3,10 @@ import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'sarorders-secret-key-change-in-production-please'
-);
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+const SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 const COOKIE = 'sarorders_token';
 
 export interface JWTPayload {
@@ -20,7 +21,7 @@ export async function signToken(payload: JWTPayload): Promise<string> {
   return new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime('2h')
     .sign(SECRET);
 }
 

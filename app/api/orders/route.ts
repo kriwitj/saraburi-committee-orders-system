@@ -7,11 +7,27 @@ import path from 'path';
 import type { UserRole } from '@/types';
 
 const ALLOWED_EXTS = ['.pdf', '.docx', '.doc', '.xlsx', '.xls'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+// Magic bytes signatures — prevents renamed executables masquerading as documents
+const MAGIC: Record<string, number[]> = {
+  '.pdf':  [0x25, 0x50, 0x44, 0x46],        // %PDF
+  '.docx': [0x50, 0x4B, 0x03, 0x04],         // PK (ZIP-based Office)
+  '.xlsx': [0x50, 0x4B, 0x03, 0x04],
+  '.doc':  [0xD0, 0xCF, 0x11, 0xE0],         // OLE2
+  '.xls':  [0xD0, 0xCF, 0x11, 0xE0],
+};
+
+function validMagic(buf: Uint8Array, ext: string): boolean {
+  const sig = MAGIC[ext];
+  return sig ? sig.every((b, i) => buf[i] === b) : false;
+}
 
 export async function GET() {
   try {
     const user = await getAuthUser();
-    const orders = await getOrders((user?.role as UserRole) || 'VIEWER');
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orders = await getOrders(user.role as UserRole);
     return NextResponse.json(orders);
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 }
@@ -31,6 +47,9 @@ export async function POST(req: NextRequest) {
     for (const file of files) {
       const ext = path.extname(file.name).toLowerCase();
       if (!ALLOWED_EXTS.includes(ext)) return NextResponse.json({ error: `ไฟล์ "${file.name}" ไม่รองรับ` }, { status: 400 });
+      if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: `ไฟล์ "${file.name}" ใหญ่เกิน 10MB` }, { status: 400 });
+      const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+      if (!validMagic(head, ext)) return NextResponse.json({ error: `ไฟล์ "${file.name}" ไม่ใช่ประเภทที่รองรับ` }, { status: 400 });
     }
 
     const data = JSON.parse(orderDataStr);

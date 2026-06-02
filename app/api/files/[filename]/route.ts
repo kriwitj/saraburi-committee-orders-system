@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { readFile } from '@/lib/storage';
+import { getAuthUser } from '@/lib/auth';
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ filename: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ filename: string }> }) {
+  const user = await getAuthUser(req);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   try {
     const { filename } = await params;
     // Sanitize: only allow alphanumeric, dash, dot

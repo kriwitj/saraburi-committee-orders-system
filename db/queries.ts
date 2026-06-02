@@ -7,20 +7,28 @@ import { DEFAULT_ORDER_TYPES, DEFAULT_MEMBER_ROLES } from '../types';
 
 // ─── Agencies ─────────────────────────────────────────────────────
 export async function getAgencies(): Promise<Agency[]> {
-  const rows = await db.select().from(agencies).orderBy(asc(agencies.name));
+  const rows = await db.select().from(agencies).orderBy(asc(agencies.sortOrder), asc(agencies.name));
   return rows.map(r => ({ id: r.id, name: r.name, createdAt: r.createdAt }));
 }
 
 export async function createAgency(name: string): Promise<Agency> {
   const id = genId();
   const now = nowIso();
-  await db.insert(agencies).values({ id, name, createdAt: now });
+  const [{ maxOrder }] = await db.select({ maxOrder: sql<number>`COALESCE(MAX(sort_order), -1)` }).from(agencies);
+  const sortOrder = (maxOrder ?? -1) + 1;
+  await db.insert(agencies).values({ id, name, sortOrder, createdAt: now });
   const [row] = await db.select().from(agencies).where(eq(agencies.id, id));
   return { id: row.id, name: row.name, createdAt: row.createdAt };
 }
 
 export async function deleteAgency(id: string): Promise<void> {
   await db.delete(agencies).where(eq(agencies.id, id));
+}
+
+export async function updateAgencyOrders(ids: string[]): Promise<void> {
+  for (let i = 0; i < ids.length; i++) {
+    await db.update(agencies).set({ sortOrder: i }).where(eq(agencies.id, ids[i]));
+  }
 }
 
 // ─── Orders ───────────────────────────────────────────────────────
@@ -71,8 +79,7 @@ export async function createOrder(data: Partial<Order>, userId?: string): Promis
 
 export async function updateOrder(id: string, data: Partial<Order>): Promise<Order | null> {
   const now = nowIso();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateData: Record<string, any> = { updatedAt: now };
+  const updateData: Partial<typeof orders.$inferInsert> & { updatedAt: string } = { updatedAt: now };
   const fieldMap: Record<string, keyof typeof orders.$inferInsert> = {
     orderNumber: 'orderNumber', orderDate: 'orderDate', effectiveDate: 'effectiveDate',
     type: 'type', title: 'title', background: 'background', signedBy: 'signedBy',
@@ -82,7 +89,7 @@ export async function updateOrder(id: string, data: Partial<Order>): Promise<Ord
   let hasChanges = false;
   for (const [k, col] of Object.entries(fieldMap)) {
     if (k in data) {
-      updateData[col] = (data as Record<string, unknown>)[k] ?? null;
+      (updateData as Record<string, unknown>)[col] = (data as Record<string, unknown>)[k] ?? null;
       hasChanges = true;
     }
   }
@@ -256,8 +263,7 @@ export async function createUser(
 export async function updateUser(id: string, data: {
   name?: string; role?: string; passwordHash?: string; prefix?: string | null; agencyId?: string | null;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateData: Record<string, any> = { updatedAt: nowIso() };
+  const updateData: Partial<typeof users.$inferInsert> & { updatedAt: string } = { updatedAt: nowIso() };
   if (data.name !== undefined) updateData.name = data.name;
   if (data.role) updateData.role = data.role;
   if (data.passwordHash) updateData.passwordHash = data.passwordHash;

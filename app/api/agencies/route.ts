@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAgencies, createAgency, deleteAgency } from '@/db/queries';
+import { getAgencies, createAgency, deleteAgency, updateAgencyOrders } from '@/db/queries';
 import { getAuthUser } from '@/lib/auth';
 
 export async function GET() {
@@ -31,6 +31,17 @@ export async function DELETE(req: NextRequest) {
     const { id } = await req.json();
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
     await deleteAgency(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const user = await getAuthUser();
+    if (!user || user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { ids } = await req.json();
+    if (!Array.isArray(ids)) return NextResponse.json({ error: 'Missing ids' }, { status: 400 });
+    await updateAgencyOrders(ids);
     return NextResponse.json({ ok: true });
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 }

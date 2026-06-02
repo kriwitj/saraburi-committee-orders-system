@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import type { Order, SubCommittee, Member, Agency } from '@/types';
-import { Modal, FG, Input, Textarea, Select, Btn } from './ui';
+import { Modal, FG, Input, Textarea, Select, Btn, SearchableSelect } from './ui';
 import { useSettings } from './providers';
 
 type OD = Omit<Order, 'id'|'subCommittees'|'attachments'|'createdAt'|'updatedAt'|'createdBy'>;
@@ -42,15 +42,13 @@ export function OrderForm({ initial, onSave, onClose }: {
     {err && <p className="text-red-600 text-sm mb-3 bg-red-50 p-2 rounded">{err}</p>}
     <div className="grid grid-cols-2 gap-x-3">
       <FG label="เลขคำสั่ง" required><Input value={f.orderNumber} onChange={set('orderNumber')} placeholder="เช่น 4971/2568" /></FG>
-      <FG label="ประเภท" required><Select options={settings.orderTypes} value={f.type} onChange={set('type')} /></FG>
+      <FG label="ประเภท" required>
+        <SearchableSelect options={settings.orderTypes} value={f.type} onChange={v => setF(p => ({ ...p, type: v }))} />
+      </FG>
     </div>
     <FG label="ชื่อเรื่อง" required><Input value={f.title} onChange={set('title')} placeholder="เรื่อง แต่งตั้ง ..." /></FG>
     <FG label="หน่วยงานเจ้าของคำสั่ง">
-      <select className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
-        value={f.agencyId || ''} onChange={e => setF(p => ({ ...p, agencyId: e.target.value || null }))}>
-        <option value="">-- ไม่ระบุ --</option>
-        {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-      </select>
+      <AgencyIdCombobox agencies={agencies} value={f.agencyId} onChange={v => setF(p => ({ ...p, agencyId: v }))} />
     </FG>
     <FG label="หลักการและเหตุผล"><Textarea rows={3} value={f.background || ''} onChange={set('background')} /></FG>
     <div className="grid grid-cols-2 gap-x-3">
@@ -183,6 +181,69 @@ function AgencyCombobox({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
+// ── Agency ID Combobox ─────────────────────────────────────────────
+function AgencyIdCombobox({ agencies, value, onChange }: {
+  agencies: Agency[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = agencies.find(a => a.id === value);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(''); }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = query
+    ? agencies.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
+    : agencies;
+
+  return (
+    <div ref={ref} className="relative">
+      {open ? (
+        <input autoFocus type="text" value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="พิมพ์เพื่อค้นหาหน่วยงาน..."
+          className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); } }}
+        />
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <span className={selected ? 'text-gray-800' : 'text-gray-400'}>{selected?.name || '-- ไม่ระบุ --'}</span>
+          <span className="text-gray-400 text-xs ml-2">▾</span>
+        </button>
+      )}
+      {open && (
+        <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          <li onMouseDown={() => { onChange(null); setOpen(false); setQuery(''); }}
+            className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 transition-colors ${!value ? 'bg-blue-50 text-blue-700' : 'text-gray-400'}`}>
+            -- ไม่ระบุ --
+          </li>
+          {filtered.length === 0 && query ? (
+            <li className="px-3 py-2 text-sm text-gray-400">ไม่พบหน่วยงาน</li>
+          ) : (
+            filtered.map(a => (
+              <li key={a.id}
+                onMouseDown={() => { onChange(a.id); setOpen(false); setQuery(''); }}
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors
+                  ${a.id === value ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-800'}`}>
+                🏢 {a.name}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Member Form ────────────────────────────────────────────────────
 type MD = Omit<Member,'id'|'subCommitteeId'>;
 export function MemberForm({ initial, onSave, onClose }: { initial?: Partial<MD>; onSave: (d: MD) => Promise<void>; onClose: () => void }) {
@@ -201,7 +262,9 @@ export function MemberForm({ initial, onSave, onClose }: { initial?: Partial<MD>
     <FG label="หน่วยงาน / สังกัด">
       <AgencyCombobox value={f.agency || ''} onChange={v => setF(p => ({ ...p, agency: v || null }))} />
     </FG>
-    <FG label="บทบาทในคณะ" required><Select options={settings.memberRoles} value={f.role||''} onChange={set('role')} /></FG>
+    <FG label="บทบาทในคณะ" required>
+      <SearchableSelect options={settings.memberRoles} value={f.role||''} onChange={v => setF(p => ({ ...p, role: v || null }))} />
+    </FG>
     <div className="flex gap-2 justify-end pt-3 border-t border-gray-100">
       <Btn variant="secondary" onClick={onClose}>ยกเลิก</Btn>
       <Btn onClick={save} loading={busy}>💾 บันทึก</Btn>

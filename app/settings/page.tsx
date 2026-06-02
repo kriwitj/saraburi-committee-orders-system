@@ -1,9 +1,34 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { useAuth, useSettings } from '@/components/providers';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Btn, Modal, ConfirmModal, Toast, Input, FG } from '@/components/ui';
 import type { Agency } from '@/types';
+
+function exportToExcel(rows: string[][], filename: string, colWidths: number[]) {
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = colWidths.map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+function readExcelFirstCol(file: File): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target?.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as string[][];
+        resolve(rows.slice(1).map(r => String(r[0] ?? '').trim()).filter(Boolean));
+      } catch { reject(new Error('อ่านไฟล์ไม่ได้')); }
+    };
+    reader.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+    reader.readAsBinaryString(file);
+  });
+}
 
 type Tab = 'types' | 'roles' | 'agencies';
 
@@ -14,12 +39,14 @@ function StringList({
   busy,
   label,
   placeholder,
+  exportFilename,
 }: {
   items: string[];
   onSave: (next: string[]) => Promise<void>;
   busy: boolean;
   label: string;
   placeholder: string;
+  exportFilename: string;
 }) {
   const [list, setList] = useState(items);
   const [addVal, setAddVal] = useState('');
@@ -27,6 +54,9 @@ function StringList({
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editVal, setEditVal] = useState('');
   const [deleteIdx, setDeleteIdx] = useState<number | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setList(items); setDirty(false); }, [items]);
 
@@ -55,17 +85,62 @@ function StringList({
     setDirty(true);
   }
 
+  function handleDrop(targetIdx: number) {
+    if (dragIdx === null || dragIdx === targetIdx) return;
+    setList(p => {
+      const n = [...p];
+      const [item] = n.splice(dragIdx, 1);
+      n.splice(targetIdx, 0, item);
+      return n;
+    });
+    setDirty(true);
+    setDragIdx(null);
+    setDragOverIdx(null);
+  }
+
+  function handleExport() {
+    exportToExcel([[label], ...list.map(item => [item])], exportFilename, [40]);
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const newItems = await readExcelFirstCol(file);
+      setList(prev => {
+        const merged = [...prev];
+        for (const item of newItems) {
+          if (item && !merged.includes(item)) merged.push(item);
+        }
+        return merged;
+      });
+      setDirty(true);
+    } catch { alert('อ่านไฟล์ไม่ได้ กรุณาตรวจสอบรูปแบบไฟล์'); }
+    e.target.value = '';
+  }
+
   return (
     <div>
-      <div className="flex gap-2 mb-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
         <Input
           value={addVal}
           onChange={e => setAddVal(e.target.value)}
           placeholder={placeholder}
           onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') add(); }}
+          className="flex-1 min-w-40"
         />
         <Btn size="sm" variant="secondary" onClick={add}>+ เพิ่ม</Btn>
+        <div className="flex gap-1">
+          <Btn size="sm" variant="ghost" onClick={handleExport} className="text-gray-500 border border-gray-200">⬇ Excel</Btn>
+          <label className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+            ⬆ นำเข้า
+            <input ref={importRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
+          </label>
+        </div>
       </div>
+
+      <p className="text-xs text-gray-400 mb-2">ลากแถวเพื่อเรียงลำดับ</p>
 
       <div className="border border-gray-200 rounded-xl overflow-hidden">
         {list.length === 0 ? (
@@ -74,6 +149,7 @@ function StringList({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-3 py-2.5 w-8"></th>
                 <th className="text-left px-4 py-2.5 font-semibold text-gray-600 w-10">#</th>
                 <th className="text-left px-4 py-2.5 font-semibold text-gray-600">{label}</th>
                 <th className="px-4 py-2.5 w-32 text-right font-semibold text-gray-600">จัดการ</th>
@@ -81,7 +157,16 @@ function StringList({
             </thead>
             <tbody>
               {list.map((item, i) => (
-                <tr key={i} className="border-t border-gray-100 hover:bg-blue-50/40 transition-colors">
+                <tr key={i}
+                  draggable
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                  onDrop={() => handleDrop(i)}
+                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                  className={`border-t border-gray-100 transition-colors
+                    ${dragOverIdx === i ? 'bg-blue-50 border-t-2 border-t-blue-400' : 'hover:bg-blue-50/40'}
+                    ${dragIdx === i ? 'opacity-40' : ''}`}>
+                  <td className="px-3 py-2.5 text-gray-300 cursor-grab select-none text-base text-center">⠿</td>
                   <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
                   <td className="px-4 py-2.5 text-gray-800">{item}</td>
                   <td className="px-4 py-2.5 text-right">
@@ -148,10 +233,13 @@ function AgencyList({ notify }: { notify: (m: string, t?: 'ok' | 'err') => void 
   const [editVal, setEditVal] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Agency | null>(null);
   const [delBusy, setDelBusy] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [reordered, setReordered] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch('/api/agencies');
-    if (r.ok) setAgencies(await r.json());
+    if (r.ok) { setAgencies(await r.json()); setReordered(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -201,17 +289,82 @@ function AgencyList({ notify }: { notify: (m: string, t?: 'ok' | 'err') => void 
     else notify('ลบไม่สำเร็จ', 'err');
   }
 
+  function handleDrop(targetIdx: number) {
+    if (dragIdx === null || dragIdx === targetIdx) return;
+    setAgencies(prev => {
+      const n = [...prev];
+      const [item] = n.splice(dragIdx, 1);
+      n.splice(targetIdx, 0, item);
+      return n;
+    });
+    setReordered(true);
+    setDragIdx(null);
+    setDragOverIdx(null);
+  }
+
+  async function saveOrder() {
+    setBusy(true);
+    const r = await fetch('/api/agencies', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: agencies.map(a => a.id) }),
+    });
+    setBusy(false);
+    if (r.ok) { setReordered(false); notify('บันทึกลำดับแล้ว'); }
+    else notify('บันทึกลำดับไม่สำเร็จ', 'err');
+  }
+
+  function handleExport() {
+    exportToExcel([['ชื่อหน่วยงาน'], ...agencies.map(a => [a.name])], 'หน่วยงาน', [50]);
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const names = await readExcelFirstCol(file);
+      const existing = new Set(agencies.map(a => a.name));
+      setBusy(true);
+      let created = 0;
+      for (const name of names) {
+        if (!existing.has(name)) {
+          await fetch('/api/agencies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+          created++;
+        }
+      }
+      setBusy(false);
+      await load();
+      notify(`นำเข้าแล้ว ${created} หน่วยงาน${created < names.length ? ` (ข้าม ${names.length - created} ที่มีอยู่แล้ว)` : ''}`);
+    } catch { setBusy(false); notify('อ่านไฟล์ไม่ได้', 'err'); }
+    e.target.value = '';
+  }
+
   return (
     <div>
-      <div className="flex gap-2 mb-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
         <Input
           value={newName}
           onChange={e => setNewName(e.target.value)}
           placeholder="ชื่อหน่วยงานใหม่..."
           onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') add(); }}
+          className="flex-1 min-w-40"
         />
         <Btn size="sm" variant="secondary" onClick={add} loading={busy}>+ เพิ่ม</Btn>
+        <div className="flex gap-1">
+          <Btn size="sm" variant="ghost" onClick={handleExport} className="text-gray-500 border border-gray-200">⬇ Excel</Btn>
+          <label className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+            ⬆ นำเข้า
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
+          </label>
+        </div>
       </div>
+
+      <p className="text-xs text-gray-400 mb-2">ลากแถวเพื่อเรียงลำดับ</p>
 
       <div className="border border-gray-200 rounded-xl overflow-hidden">
         {agencies.length === 0 ? (
@@ -220,6 +373,7 @@ function AgencyList({ notify }: { notify: (m: string, t?: 'ok' | 'err') => void 
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-3 py-2.5 w-8"></th>
                 <th className="text-left px-4 py-2.5 font-semibold text-gray-600 w-10">#</th>
                 <th className="text-left px-4 py-2.5 font-semibold text-gray-600">ชื่อหน่วยงาน</th>
                 <th className="px-4 py-2.5 w-32 text-right font-semibold text-gray-600">จัดการ</th>
@@ -227,7 +381,16 @@ function AgencyList({ notify }: { notify: (m: string, t?: 'ok' | 'err') => void 
             </thead>
             <tbody>
               {agencies.map((a, i) => (
-                <tr key={a.id} className="border-t border-gray-100 hover:bg-blue-50/40 transition-colors">
+                <tr key={a.id}
+                  draggable
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                  onDrop={() => handleDrop(i)}
+                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                  className={`border-t border-gray-100 transition-colors
+                    ${dragOverIdx === i ? 'bg-blue-50 border-t-2 border-t-blue-400' : 'hover:bg-blue-50/40'}
+                    ${dragIdx === i ? 'opacity-40' : ''}`}>
+                  <td className="px-3 py-2.5 text-gray-300 cursor-grab select-none text-base text-center">⠿</td>
                   <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
                   <td className="px-4 py-2.5 text-gray-800">{a.name}</td>
                   <td className="px-4 py-2.5 text-right">
@@ -248,6 +411,12 @@ function AgencyList({ notify }: { notify: (m: string, t?: 'ok' | 'err') => void 
           </table>
         )}
       </div>
+
+      {reordered && (
+        <div className="mt-4 flex justify-end">
+          <Btn onClick={saveOrder} loading={busy}>💾 บันทึกลำดับ</Btn>
+        </div>
+      )}
 
       {/* Edit modal */}
       {editTarget && (
@@ -367,6 +536,7 @@ export default function SettingsPage() {
                 busy={busy}
                 label="ประเภทคำสั่ง"
                 placeholder="เพิ่มประเภทใหม่..."
+                exportFilename="ประเภทคำสั่ง"
               />
             )}
             {activeTab === 'roles' && (
@@ -376,6 +546,7 @@ export default function SettingsPage() {
                 busy={busy}
                 label="บทบาท"
                 placeholder="เพิ่มบทบาทใหม่..."
+                exportFilename="บทบาท"
               />
             )}
             {activeTab === 'agencies' && (

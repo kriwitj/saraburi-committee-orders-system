@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { OrderStatus } from '@/types';
 import { STATUS_LABELS, STATUS_COLORS } from '@/types';
@@ -125,6 +125,77 @@ export function Select({ options, ...p }: { options: string[] } & React.SelectHT
       <option value="">-- เลือก --</option>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
+  );
+}
+
+export function SearchableSelect({ options, value, onChange, placeholder = '-- เลือก --' }: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = query
+    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <div ref={ref} className="relative">
+      {open ? (
+        <input
+          autoFocus
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="พิมพ์เพื่อค้นหา..."
+          className={`${ic} bg-white`}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setOpen(false); setQuery(''); }
+            if (e.key === 'Enter' && filtered.length === 1) { onChange(filtered[0]); setOpen(false); setQuery(''); }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={`${ic} bg-white text-left flex items-center justify-between`}
+        >
+          <span className={value ? 'text-gray-800' : 'text-gray-400'}>{value || placeholder}</span>
+          <span className="text-gray-400 text-xs ml-2">▾</span>
+        </button>
+      )}
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map(o => (
+            <li key={o}
+              onMouseDown={() => { onChange(o); setOpen(false); setQuery(''); }}
+              className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors
+                ${o === value ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-800'}`}>
+              {o}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && filtered.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
+          ไม่พบรายการ
+        </div>
+      )}
+    </div>
   );
 }
 

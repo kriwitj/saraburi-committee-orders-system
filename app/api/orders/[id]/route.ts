@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrder, updateOrder, deleteOrder } from '@/db/queries';
 import { getAuthUser } from '@/lib/auth';
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getAuthUser(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await params;
     const order = await getOrder(id);
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
