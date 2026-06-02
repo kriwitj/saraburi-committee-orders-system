@@ -24,6 +24,10 @@ COPY . .
 ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
 ENV DATABASE_URL=$DATABASE_URL
 
+# NEXT_PUBLIC_* ถูก inline เข้า bundle ตอน build — ต้องส่งมาเป็น ARG
+ARG NEXT_PUBLIC_SSO_ENABLED=false
+ENV NEXT_PUBLIC_SSO_ENABLED=$NEXT_PUBLIC_SSO_ENABLED
+
 # Build Next.js app (output: standalone)
 RUN npm run build
 

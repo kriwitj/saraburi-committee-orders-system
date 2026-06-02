@@ -53,6 +53,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* ต้องส่งตอน build (ไม่ใช่ runtime)
+        NEXT_PUBLIC_SSO_ENABLED: ${NEXT_PUBLIC_SSO_ENABLED:-false}
     container_name: sarorders-app
     restart: unless-stopped
     expose:
@@ -63,6 +66,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       NEXTAUTH_URL: https://${DOMAIN}
       UPLOAD_DIR: /app/uploads
+      # Keycloak SSO — ใส่ค่าใน .env ถ้าต้องการใช้ SSO
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
     volumes:
       - uploads:/app/uploads
     depends_on:
