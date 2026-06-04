@@ -177,15 +177,12 @@ export async function getAttachments(orderId: string): Promise<Attachment[]> {
   const rows = await db.select().from(attachments)
     .where(eq(attachments.orderId, orderId))
     .orderBy(asc(attachments.createdAt));
-  return rows.map(a => ({
-    id: a.id, orderId: a.orderId, filename: a.filename, originalName: a.originalName,
-    fileType: a.fileType, blobUrl: a.blobUrl, size: a.size, createdAt: a.createdAt,
-  }));
+  return rows.map(mapAttachment);
 }
 
 export async function createAttachment(
   orderId: string,
-  data: { filename: string; originalName: string; fileType: string; blobUrl: string; size: number },
+  data: { filename: string; originalName: string; fileType: string; blobUrl: string; size: number; isPublic?: boolean },
   userId?: string,
 ): Promise<Attachment> {
   const id = genId();
@@ -193,13 +190,15 @@ export async function createAttachment(
   await db.insert(attachments).values({
     id, orderId, filename: data.filename, originalName: data.originalName,
     fileType: data.fileType, blobUrl: data.blobUrl, size: data.size,
+    isPublic: data.isPublic === false ? 0 : 1,
     uploadedBy: userId || null, createdAt: now,
   });
   const [a] = await db.select().from(attachments).where(eq(attachments.id, id));
-  return {
-    id: a.id, orderId: a.orderId, filename: a.filename, originalName: a.originalName,
-    fileType: a.fileType, blobUrl: a.blobUrl, size: a.size, createdAt: a.createdAt,
-  };
+  return mapAttachment(a);
+}
+
+export async function setAttachmentVisibility(id: string, isPublic: boolean): Promise<void> {
+  await db.update(attachments).set({ isPublic: isPublic ? 1 : 0 }).where(eq(attachments.id, id));
 }
 
 export async function deleteAttachment(id: string): Promise<string> {
@@ -302,6 +301,16 @@ export async function seedIfEmpty(adminHash: string) {
 
 // ─── Helpers ──────────────────────────────────────────────────────
 type OrderRow = typeof orders.$inferSelect;
+type AttachmentRow = typeof attachments.$inferSelect;
+
+function mapAttachment(a: AttachmentRow): Attachment {
+  return {
+    id: a.id, orderId: a.orderId, filename: a.filename, originalName: a.originalName,
+    fileType: a.fileType, blobUrl: a.blobUrl, size: a.size,
+    isPublic: a.isPublic !== 0,
+    createdAt: a.createdAt,
+  };
+}
 
 function mapOrder(o: OrderRow, scs: SubCommittee[], atts: Attachment[]): Order {
   return {

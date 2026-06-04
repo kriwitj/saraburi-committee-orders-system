@@ -37,7 +37,9 @@ export async function GET(req: NextRequest) {
       agencyId: o.agencyId,
       subCommitteesCount: o.subCommittees.length,
       membersCount: o.subCommittees.reduce((s, sc) => s + sc.members.length, 0),
-      attachments: o.attachments,
+      attachments: o.attachments.filter(a => a.isPublic).map(a => ({
+        id: a.id, originalName: a.originalName, fileType: a.fileType,
+      })),
     }));
 
     return NextResponse.json(slim, {

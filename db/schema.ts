@@ -73,6 +73,7 @@ export const attachments = pgTable('attachments', {
   fileType: text('file_type').notNull(),
   blobUrl: text('blob_url').notNull(),
   size: integer('size').notNull().default(0),
+  isPublic: integer('is_public').notNull().default(1), // 1=สาธารณะ 0=ส่วนตัว
   uploadedBy: text('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: text('created_at').notNull().default(nowSql),
 });

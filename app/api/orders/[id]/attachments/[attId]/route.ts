@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import { deleteAttachment } from '@/db/queries';
+import { deleteAttachment, setAttachmentVisibility } from '@/db/queries';
 import { getAuthUser } from '@/lib/auth';
 import { deleteFile, readFile } from '@/lib/storage';
 import { db } from '@/db/index';
@@ -34,6 +34,18 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ attId:
         'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(displayName)}`,
       },
     });
+  } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ attId: string }> }) {
+  try {
+    const user = await getAuthUser();
+    if (!user || user.role === 'VIEWER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { attId } = await params;
+    const { isPublic } = await req.json();
+    if (typeof isPublic !== 'boolean') return NextResponse.json({ error: 'Invalid' }, { status: 400 });
+    await setAttachmentVisibility(attId, isPublic);
+    return NextResponse.json({ ok: true });
   } catch (e) { console.error(e); return NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 }
 

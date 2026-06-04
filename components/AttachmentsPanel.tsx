@@ -14,6 +14,7 @@ export function AttachmentsPanel({ orderId, attachments, onRefresh }: {
   const [uploading, setUploading] = useState(false);
   const [delId, setDelId] = useState<string | null>(null);
   const [delBusy, setDelBusy] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
   const [err, setErr] = useState('');
 
   const canEdit = user?.role !== 'VIEWER';
@@ -40,6 +41,17 @@ export function AttachmentsPanel({ orderId, attachments, onRefresh }: {
     onRefresh();
   }
 
+  async function toggleVisibility(att: Attachment) {
+    setToggling(att.id);
+    await fetch(`/api/orders/${orderId}/attachments/${att.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPublic: !att.isPublic }),
+    });
+    setToggling(null);
+    onRefresh();
+  }
+
   return (
     <div>
       {err && <p className="text-red-600 text-sm mb-2 bg-red-50 p-2 rounded">{err}</p>}
@@ -61,12 +73,30 @@ export function AttachmentsPanel({ orderId, attachments, onRefresh }: {
               <span className="text-xl flex-shrink-0">{TYPE_ICONS[att.fileType] || '📎'}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-gray-800 truncate">{att.originalName}</div>
-                <div className="text-xs text-gray-400">{att.fileType} · {formatBytes(att.size)}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs text-gray-400">{att.fileType} · {formatBytes(att.size)}</span>
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                    att.isPublic
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {att.isPublic ? '🌐 สาธารณะ' : '🔒 ส่วนตัว'}
+                  </span>
+                </div>
               </div>
               <div className="flex gap-1.5 flex-shrink-0">
                 <a href={`/api/orders/${orderId}/attachments/${att.id}`} target="_blank" rel="noreferrer">
                   <Btn size="sm" variant="secondary">⬇ เปิด</Btn>
                 </a>
+                {canEdit && (
+                  <Btn size="sm" variant="ghost"
+                    loading={toggling === att.id}
+                    onClick={() => toggleVisibility(att)}
+                    className="text-gray-500 border border-gray-200"
+                    title={att.isPublic ? 'คลิกเพื่อเปลี่ยนเป็นส่วนตัว' : 'คลิกเพื่อเปลี่ยนเป็นสาธารณะ'}>
+                    {att.isPublic ? '🔒' : '🌐'}
+                  </Btn>
+                )}
                 {canEdit && <Btn size="sm" variant="danger" onClick={() => setDelId(att.id)}>🗑</Btn>}
               </div>
             </div>

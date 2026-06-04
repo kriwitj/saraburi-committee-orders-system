@@ -44,6 +44,7 @@ export interface Attachment {
   fileType: string;
   blobUrl: string;
   size: number;
+  isPublic: boolean;
   createdAt: string;
 }
 

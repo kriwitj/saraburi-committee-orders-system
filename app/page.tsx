@@ -14,7 +14,7 @@ interface PublicOrder {
   agencyId: string | null;
   subCommitteesCount: number;
   membersCount: number;
-  attachments: { id: string; originalName: string; fileType: string; blobUrl: string }[];
+  attachments: { id: string; originalName: string; fileType: string }[];
 }
 interface AuthUser { name: string | null; email: string; role: string; }
 interface Agency { id: string; name: string; }
@@ -241,7 +241,7 @@ export default function LandingPage() {
                       <div className="px-4 pb-3 flex flex-wrap gap-1.5">
                         {o.attachments.map(att => (
                           <a key={att.id}
-                            href={att.blobUrl}
+                            href={`/api/public/files/${att.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg
